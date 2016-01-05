@@ -20,10 +20,10 @@ func processReader(reader io.Reader, out chan Event) {
 	in := bufio.NewReader(reader)
 
 	// Stores event data, which is filled after one or many lines from the reader
-	var eventName, dataBuffer = "", new(bytes.Buffer)
+	var eventType, dataBuffer = new(bytes.Buffer), new(bytes.Buffer)
 
 	// Stores data about the current line being processed
-	var fieldName, fieldValue = "", new(bytes.Buffer)
+	var field, value = new(bytes.Buffer), new(bytes.Buffer)
 
 	for {
 		line, err := in.ReadBytes('\n')
@@ -33,10 +33,23 @@ func processReader(reader io.Reader, out chan Event) {
 
 		// Dispatch event
 		if bytes.Equal(line, []byte("\r\n")) || bytes.Equal(line, []byte("\n")) || bytes.Equal(line, []byte("\r")) {
-			out <- Event{Type: eventName, Data: []byte(dataBuffer.String())}
-			fieldName, eventName = "", ""
+			if dataBuffer.Len() == 0 {
+				dataBuffer.Reset()
+				eventType.Reset()
+				continue
+			}
+
+			// Trim last byte if its a line feed
+			data := dataBuffer.Bytes()
+			data = bytes.TrimSuffix(data, []byte("\n"))
+
+			// Create event and reset buffers
+			event := Event{Type: eventType.String(), Data: []byte(string(data))}
+			eventType.Reset()
 			dataBuffer.Reset()
-			fieldValue.Reset()
+
+			// Dispatch event
+			out <- event
 			continue
 		}
 
@@ -45,40 +58,37 @@ func processReader(reader io.Reader, out chan Event) {
 			continue
 		}
 
-		// Extract field/value
+		// Extract field/value for current line
+		field.Reset()
+		value.Reset()
 		colonIndex := bytes.Index(line, []byte(":"))
 		if colonIndex != -1 {
-			fieldName = string(line[:colonIndex])
-			value := line[colonIndex+1:]
-			value = bytes.TrimLeft(value, " ")
-			value = bytes.TrimRight(value, "\r\n")
-			fieldValue.Reset()
-			fieldValue.Write(value)
+			// Name
+			field.Write(line[:colonIndex])
+
+			// Value
+			line = line[colonIndex+1:]
+			line = bytes.TrimPrefix(line, []byte(" "))
+			line = bytes.TrimRight(line, "\r\n")
+			value.Write(line)
 		} else {
-			fieldName = string(line)
-			fieldValue.Reset()
+			// Name
+			line = bytes.TrimRight(line, " \r\n")
+			field.Write(line)
 		}
 
-		// Fill data buffer
+		// Process field
+		fieldName := field.String()
 		switch fieldName {
 		case "event":
-			eventName = fieldValue.String()
-			break
+			eventType.WriteString(fieldName)
 		case "data":
-			if dataBuffer.Len() > 0 {
-				dataBuffer.WriteByte('\n')
-			}
-			dataBuffer.Write(fieldValue.Bytes())
-			break
-		case "id":
+			dataBuffer.Write(value.Bytes())
+			dataBuffer.WriteByte('\n')
+		case "id", "retry":
 			// TODO(alevinval): unused at the moment, together with reconnection time
-			break
-		case "retry":
-			// TODO(alevinval): don't ignore reconnection time?
-			break
 		default:
 			// Ignore field
-			break
 		}
 	}
 }
