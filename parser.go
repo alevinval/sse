@@ -7,7 +7,7 @@ import (
 )
 
 // Returns a channel of SSE events from a reader input.
-func parseStream(reader io.Reader) <-chan Event {
+func parseStream(reader io.Reader) chan Event {
 	output := make(chan Event)
 	go processReader(reader, output)
 	return output
@@ -26,9 +26,10 @@ func processReader(reader io.Reader, out chan Event) {
 	var field, value = new(bytes.Buffer), new(bytes.Buffer)
 
 	for {
-		line, err := in.ReadBytes('\n')
+		line, err := in.ReadSlice('\n')
 		if err != nil {
-			continue
+			close(out)
+			return
 		}
 
 		// Dispatch event
@@ -44,7 +45,9 @@ func processReader(reader io.Reader, out chan Event) {
 			data = bytes.TrimSuffix(data, []byte("\n"))
 
 			// Create event and reset buffers
-			event := Event{Type: eventType.String(), Data: []byte(string(data))}
+			event := Event{Type: eventType.String(), Data: make([]byte, len(data))}
+			copy(event.Data, data)
+
 			eventType.Reset()
 			dataBuffer.Reset()
 
