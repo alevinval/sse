@@ -18,8 +18,8 @@ type (
 	EventSource struct {
 		url        string
 		in         io.ReadCloser
+		out        chan *Event
 		readyState byte
-		events     chan *Event
 	}
 )
 
@@ -35,7 +35,7 @@ func NewEventSource(url string) (*EventSource, error) {
 func (me *EventSource) initialise(url string) {
 	me.url = url
 	me.in = nil
-	me.events = make(chan *Event)
+	me.out = make(chan *Event)
 	me.readyState = CONNECTING
 }
 
@@ -55,7 +55,7 @@ func (me *EventSource) connect() error {
 // Method consume() must be called once connect() succeeds.
 // It parses the input reader and assigns the event output channel accordingly.
 func (me *EventSource) consume() {
-	me.events = parseStream(me.in)
+	me.out = parseStream(me.in)
 }
 
 // Returns the event source URL.
@@ -71,5 +71,5 @@ func (me *EventSource) ReadyState() byte {
 // Returns the channel of events. Events will be queued in the channel as they
 // are received.
 func (me *EventSource) Events() <-chan *Event {
-	return me.events
+	return me.out
 }
