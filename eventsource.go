@@ -11,11 +11,12 @@ const (
 )
 
 type (
-	Event struct {
-		Type string
-		Data []byte
+	EventSource interface {
+		URL() string
+		ReadyState() byte
+		Events() <-chan *Event
 	}
-	EventSource struct {
+	eventSource struct {
 		url        string
 		in         io.ReadCloser
 		out        chan *Event
@@ -25,14 +26,14 @@ type (
 
 // Constructs a new EventSource struct that satisfies the HTML5
 // EventSource interface.
-func NewEventSource(url string) (*EventSource, error) {
-	es := &EventSource{}
+func NewEventSource(url string) (EventSource, error) {
+	es := &eventSource{}
 	es.initialise(url)
 	err := es.connect()
 	return es, err
 }
 
-func (me *EventSource) initialise(url string) {
+func (me *eventSource) initialise(url string) {
 	me.url = url
 	me.in = nil
 	me.out = make(chan *Event)
@@ -40,7 +41,7 @@ func (me *EventSource) initialise(url string) {
 }
 
 // Attempts to connect and updates internal status depending on the outcome.
-func (me *EventSource) connect() error {
+func (me *eventSource) connect() error {
 	response, err := httpConnectToSSE(me.url)
 	if err != nil {
 		me.readyState = CLOSED
@@ -54,22 +55,22 @@ func (me *EventSource) connect() error {
 
 // Method consume() must be called once connect() succeeds.
 // It parses the input reader and assigns the event output channel accordingly.
-func (me *EventSource) consume() {
-	me.out = parseStream(me.in)
+func (me *eventSource) consume() {
+	me.out = Decode(me.in)
 }
 
 // Returns the event source URL.
-func (me *EventSource) URL() string {
+func (me *eventSource) URL() string {
 	return me.url
 }
 
 // Returns the event source connection state, either connecting, open or closed.
-func (me *EventSource) ReadyState() byte {
+func (me *eventSource) ReadyState() byte {
 	return me.readyState
 }
 
 // Returns the channel of events. Events will be queued in the channel as they
 // are received.
-func (me *EventSource) Events() <-chan *Event {
+func (me *eventSource) Events() <-chan *Event {
 	return me.out
 }

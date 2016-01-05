@@ -7,16 +7,16 @@ import (
 )
 
 // Returns a channel of SSE events from a reader input.
-func parseStream(reader io.Reader) chan *Event {
+func Decode(reader io.Reader) chan *Event {
 	output := make(chan *Event)
-	go processReader(reader, output)
+	go process(reader, output)
 	return output
 }
 
 // Processes a reader and sends the parsed SSE events
 // to the output channel.
 // This function is intended to run in a go-routine
-func processReader(reader io.Reader, out chan *Event) {
+func process(reader io.Reader, out chan *Event) {
 	in := bufio.NewReader(reader)
 
 	// Stores event data, which is filled after one or many lines from the reader
@@ -45,8 +45,8 @@ func processReader(reader io.Reader, out chan *Event) {
 			data = bytes.TrimSuffix(data, []byte("\n"))
 
 			// Create event and reset buffers
-			event := &Event{Type: eventType.String(), Data: make([]byte, len(data))}
-			copy(event.Data, data)
+			event := &Event{event: eventType.String(), data: make([]byte, len(data))}
+			copy(event.data, data)
 
 			eventType.Reset()
 			dataBuffer.Reset()
