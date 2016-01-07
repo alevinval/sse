@@ -33,21 +33,23 @@ func process(reader io.Reader, out chan *Event) {
 		}
 
 		// Dispatch event
-		if bytes.Equal(line, []byte("\r\n")) || bytes.Equal(line, []byte("\n")) || bytes.Equal(line, []byte("\r")) {
+		if bytes.Equal(line, []byte("\n")) || bytes.Equal(line, []byte("\r\n")) {
+			// Skip event if Data buffer its empty
 			if dataBuffer.Len() == 0 {
 				dataBuffer.Reset()
 				eventType.Reset()
 				continue
 			}
 
-			// Trim last byte if its a line feed
 			data := dataBuffer.Bytes()
+
+			// Trim last byte if line feed
 			data = bytes.TrimSuffix(data, []byte("\n"))
 
-			// Create event and reset buffers
-			event := &Event{event: eventType.String(), data: make([]byte, len(data))}
-			copy(event.data, data)
+			// Create event
+			event := NewEvent("", eventType.String(), data)
 
+			// Clear event buffers
 			eventType.Reset()
 			dataBuffer.Reset()
 
@@ -61,22 +63,19 @@ func process(reader io.Reader, out chan *Event) {
 			continue
 		}
 
+		// Sanitise line feeds
+		line = sanitiseLineEnding(line)
+
 		// Extract field/value for current line
 		field.Reset()
 		value.Reset()
 		colonIndex := bytes.Index(line, []byte(":"))
 		if colonIndex != -1 {
-			// Name
 			field.Write(line[:colonIndex])
-
-			// Value
 			line = line[colonIndex+1:]
 			line = bytes.TrimPrefix(line, []byte(" "))
-			line = bytes.TrimRight(line, "\r\n")
 			value.Write(line)
 		} else {
-			// Name
-			line = bytes.TrimRight(line, " \r\n")
 			field.Write(line)
 		}
 
@@ -94,4 +93,14 @@ func process(reader io.Reader, out chan *Event) {
 			// Ignore field
 		}
 	}
+}
+
+func sanitiseLineEnding(in []byte) []byte {
+	var sanitisedLine []byte
+	if bytes.HasSuffix(in, []byte("\r\n")) {
+		sanitisedLine = bytes.TrimSuffix(in, []byte("\r\n"))
+	} else {
+		sanitisedLine = bytes.TrimSuffix(in, []byte("\n"))
+	}
+	return sanitisedLine
 }
