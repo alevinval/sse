@@ -15,7 +15,7 @@ type (
 )
 
 func (me *ErrHttpNotOk) Error() string {
-	return fmt.Sprintf("request status code was %q instead of %q", me.code, http.StatusOK)
+	return fmt.Sprintf("request status code was %d instead of %d", me.code, http.StatusOK)
 }
 
 func (me *ErrContentType) Error() string {
