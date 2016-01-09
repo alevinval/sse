@@ -35,7 +35,7 @@ func consume(t *testing.T, events <-chan sse.Event) sse.Event {
 		return ev
 	case <-timeout(1000):
 		assert.Fail(t, "timeout reached before dispatching event")
-		return sse.Event{}
+		return nil
 	}
 }
 

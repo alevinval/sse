@@ -6,7 +6,13 @@ import (
 	"io"
 )
 
-const defaultBufferSize = 8096
+const (
+	defaultBufferSize = 8096
+)
+
+var (
+	DefaultDecoder = &Decoder{defaultBufferSize}
+)
 
 type (
 	Decoder struct {
@@ -14,14 +20,15 @@ type (
 	}
 )
 
-var (
-	DefaultDecoder = &Decoder{defaultBufferSize}
-)
-
 func NewDecoder(bufferSize int) *Decoder {
 	d := &Decoder{}
 	d.initialise(bufferSize)
 	return d
+}
+
+// Default decode function, with default buffer size
+func Decode(reader io.Reader) <-chan Event {
+	return DefaultDecoder.Decode(reader)
 }
 
 func (me *Decoder) initialise(bufferSize int) {
@@ -34,11 +41,6 @@ func (me *Decoder) Decode(reader io.Reader) <-chan Event {
 	out := make(chan Event)
 	go process(in, out)
 	return out
-}
-
-// Default decode function, with default buffer size
-func Decode(reader io.Reader) <-chan Event {
-	return DefaultDecoder.Decode(reader)
 }
 
 // Processes a reader and sends the parsed SSE events
