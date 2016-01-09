@@ -10,8 +10,8 @@ import (
 func doBenchmark(b *testing.B, data []byte) {
 	data = append(data, data...)
 	reader := bytes.NewReader(data)
-	sse.DefaultDecoder = sse.NewDecoder(65536)
-	events := sse.Decode(reader)
+	decoder := sse.NewDecoder(65536)
+	events := decoder.Decode(reader)
 	time.Sleep(100 * time.Millisecond)
 
 	for i := 0; i < b.N; i++ {

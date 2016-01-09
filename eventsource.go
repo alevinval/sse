@@ -5,9 +5,9 @@ import (
 )
 
 const (
-	CONNECTING byte = iota
-	OPEN
-	CLOSED
+	STATUS_CONNECTING byte = iota
+	STATUS_OPEN
+	STATUS_CLOSED
 )
 
 type (
@@ -37,19 +37,19 @@ func (me *eventSource) initialise(url string) {
 	me.url = url
 	me.in = nil
 	me.out = nil
-	me.readyState = CONNECTING
+	me.readyState = STATUS_CONNECTING
 }
 
 // Attempts to connect and updates internal status depending on the outcome.
 func (me *eventSource) connect() error {
 	response, err := httpConnectToSSE(me.url)
 	if err != nil {
-		me.readyState = CLOSED
+		me.readyState = STATUS_CLOSED
 		return err
 	}
 	me.in = response.Body
 	me.consume()
-	me.readyState = OPEN
+	me.readyState = STATUS_OPEN
 	return nil
 }
 

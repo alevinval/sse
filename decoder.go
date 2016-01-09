@@ -11,32 +11,27 @@ const (
 )
 
 var (
-	DefaultDecoder = &Decoder{defaultBufferSize}
+	DefaultDecoder = &decoder{defaultBufferSize}
 )
 
 type (
-	Decoder struct {
+	decoder struct {
 		bufferSize int
 	}
 )
 
-func NewDecoder(bufferSize int) *Decoder {
-	d := &Decoder{}
+func NewDecoder(bufferSize int) *decoder {
+	d := &decoder{}
 	d.initialise(bufferSize)
 	return d
 }
 
-// Default decode function, with default buffer size
-func Decode(reader io.Reader) <-chan Event {
-	return DefaultDecoder.Decode(reader)
-}
-
-func (me *Decoder) initialise(bufferSize int) {
+func (me *decoder) initialise(bufferSize int) {
 	me.bufferSize = bufferSize
 }
 
 // Returns a channel of SSE events from a reader input.
-func (me *Decoder) Decode(reader io.Reader) <-chan Event {
+func (me *decoder) Decode(reader io.Reader) <-chan Event {
 	in := bufio.NewReaderSize(reader, me.bufferSize)
 	out := make(chan Event)
 	go process(in, out)
@@ -75,7 +70,7 @@ func process(in *bufio.Reader, out chan Event) {
 			data = bytes.TrimSuffix(data, []byte("\n"))
 
 			// Create event
-			event := NewEvent("", eventType.String(), data)
+			event := newEvent("", eventType.String(), data)
 
 			// Clear event buffers
 			eventType.Reset()

@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	ContentTypeEventStream = "text/event-stream"
+	contentTypeEventStream = "text/event-stream"
 )
 
 type (
@@ -23,7 +23,7 @@ func (me ErrHttpNotOk) Error() string {
 }
 
 func (me ErrHttpContentType) Error() string {
-	return fmt.Sprintf("content type is %q instead of %q", me.contentType, ContentTypeEventStream)
+	return fmt.Sprintf("content type is %q instead of %q", me.contentType, contentTypeEventStream)
 }
 
 // Attempts to open an HTTP connection, validates that the server supports
@@ -37,7 +37,7 @@ func httpConnectToSSE(url string) (*http.Response, error) {
 		return response, ErrHttpNotOk{response.StatusCode}
 	}
 	contentType := response.Header.Get("Content-Type")
-	if contentType != ContentTypeEventStream {
+	if contentType != contentTypeEventStream {
 		return response, ErrHttpContentType{contentType}
 	}
 	return response, nil

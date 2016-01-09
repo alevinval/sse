@@ -21,7 +21,7 @@ func timeout(ms time.Duration) <-chan bool {
 // Extracts events from a string
 func decode(data string) <-chan sse.Event {
 	reader := bytes.NewReader([]byte(data))
-	return sse.Decode(reader)
+	return sse.DefaultDecoder.Decode(reader)
 }
 
 // Attempts to consume an event from the decoding stream. Fails

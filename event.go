@@ -13,7 +13,7 @@ type (
 	}
 )
 
-func NewEvent(id, name string, data []byte) Event {
+func newEvent(id, name string, data []byte) Event {
 	e := &event{}
 	e.initialise(id, name, data)
 	return e

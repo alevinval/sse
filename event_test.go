@@ -1,7 +1,6 @@
-package sse_test
+package sse
 
 import (
-	"github.com/mubit/sse"
 	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
@@ -9,7 +8,7 @@ import (
 
 func TestProperEventInitialisation(t *testing.T) {
 	test_data := []byte("test event data")
-	event := sse.NewEvent("test_id", "test_name", test_data)
+	event := newEvent("test_id", "test_name", test_data)
 
 	assert.Equal(t, "test_id", event.Id())
 	assert.Equal(t, "test_name", event.Name())
@@ -18,7 +17,7 @@ func TestProperEventInitialisation(t *testing.T) {
 
 func TestInitialiseEventCopiesDataBuffer(t *testing.T) {
 	test_data := []byte("test event data")
-	event := sse.NewEvent("test_id", "test_name", test_data)
+	event := newEvent("test_id", "test_name", test_data)
 
 	// Pointers should differ, because NewEvent() allocates a new buffer
 	// and copies data over.
