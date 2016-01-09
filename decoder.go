@@ -6,19 +6,45 @@ import (
 	"io"
 )
 
+const defaultBufferSize = 8096
+
+type (
+	Decoder struct {
+		bufferSize int
+	}
+)
+
+var (
+	DefaultDecoder = &Decoder{defaultBufferSize}
+)
+
+func NewDecoder(bufferSize int) *Decoder {
+	d := &Decoder{}
+	d.initialise(bufferSize)
+	return d
+}
+
+func (me *Decoder) initialise(bufferSize int) {
+	me.bufferSize = bufferSize
+}
+
 // Returns a channel of SSE events from a reader input.
-func Decode(reader io.Reader) chan *Event {
-	output := make(chan *Event)
-	go process(reader, output)
-	return output
+func (me *Decoder) Decode(reader io.Reader) <-chan Event {
+	in := bufio.NewReaderSize(reader, me.bufferSize)
+	out := make(chan Event)
+	go process(in, out)
+	return out
+}
+
+// Default decode function, with default buffer size
+func Decode(reader io.Reader) <-chan Event {
+	return DefaultDecoder.Decode(reader)
 }
 
 // Processes a reader and sends the parsed SSE events
 // to the output channel.
-// This function is intended to run in a go-routine
-func process(reader io.Reader, out chan *Event) {
-	in := bufio.NewReader(reader)
-
+// This function is intended to run in a go-routine.
+func process(in *bufio.Reader, out chan Event) {
 	// Stores event data, which is filled after one or many lines from the reader
 	var eventType, dataBuffer = new(bytes.Buffer), new(bytes.Buffer)
 
@@ -64,7 +90,7 @@ func process(reader io.Reader, out chan *Event) {
 		}
 
 		// Sanitise line feeds
-		line = sanitiseLineEnding(line)
+		line = sanitise(line)
 
 		// Extract field/value for current line
 		field.Reset()
@@ -95,12 +121,12 @@ func process(reader io.Reader, out chan *Event) {
 	}
 }
 
-func sanitiseLineEnding(in []byte) []byte {
-	var sanitisedLine []byte
-	if bytes.HasSuffix(in, []byte("\r\n")) {
-		sanitisedLine = bytes.TrimSuffix(in, []byte("\r\n"))
+// Sanitises line feed ending.
+func sanitise(line []byte) []byte {
+	if bytes.HasSuffix(line, []byte("\r\n")) {
+		line = bytes.TrimSuffix(line, []byte("\r\n"))
 	} else {
-		sanitisedLine = bytes.TrimSuffix(in, []byte("\n"))
+		line = bytes.TrimSuffix(line, []byte("\n"))
 	}
-	return sanitisedLine
+	return line
 }

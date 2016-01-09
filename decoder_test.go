@@ -19,14 +19,14 @@ func timeout(ms time.Duration) <-chan bool {
 }
 
 // Extracts events from a string
-func decode(data string) <-chan *sse.Event {
+func decode(data string) <-chan sse.Event {
 	reader := bytes.NewReader([]byte(data))
 	return sse.Decode(reader)
 }
 
 // Attempts to consume an event from the decoding stream. Fails
 // on timeouts or closed channel.
-func consume(t *testing.T, events <-chan *sse.Event) *sse.Event {
+func consume(t *testing.T, events <-chan sse.Event) sse.Event {
 	select {
 	case ev, ok := <-events:
 		if !ok {
@@ -35,7 +35,7 @@ func consume(t *testing.T, events <-chan *sse.Event) *sse.Event {
 		return ev
 	case <-timeout(1000):
 		assert.Fail(t, "timeout reached before dispatching event")
-		return nil
+		return sse.Event{}
 	}
 }
 

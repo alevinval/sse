@@ -8,8 +8,8 @@ type (
 	}
 )
 
-func NewEvent(id, event string, data []byte) *Event {
-	ev := &Event{}
+func NewEvent(id, event string, data []byte) Event {
+	ev := Event{}
 	ev.initialise(id, event, data)
 	return ev
 }
@@ -30,5 +30,5 @@ func (me *Event) Event() string {
 }
 
 func (me *Event) Data() []byte {
-	return me.data[:]
+	return me.data
 }

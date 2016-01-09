@@ -14,12 +14,12 @@ type (
 	EventSource interface {
 		URL() string
 		ReadyState() byte
-		Events() <-chan *Event
+		Events() <-chan Event
 	}
 	eventSource struct {
 		url        string
 		in         io.ReadCloser
-		out        chan *Event
+		out        <-chan Event
 		readyState byte
 	}
 )
@@ -36,7 +36,7 @@ func NewEventSource(url string) (EventSource, error) {
 func (me *eventSource) initialise(url string) {
 	me.url = url
 	me.in = nil
-	me.out = make(chan *Event)
+	me.out = make(<-chan Event)
 	me.readyState = CONNECTING
 }
 
@@ -71,6 +71,6 @@ func (me *eventSource) ReadyState() byte {
 
 // Returns the channel of events. Events will be queued in the channel as they
 // are received.
-func (me *eventSource) Events() <-chan *Event {
+func (me *eventSource) Events() <-chan Event {
 	return me.out
 }
