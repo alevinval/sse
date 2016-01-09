@@ -36,7 +36,7 @@ func NewEventSource(url string) (EventSource, error) {
 func (me *eventSource) initialise(url string) {
 	me.url = url
 	me.in = nil
-	me.out = make(<-chan Event)
+	me.out = nil
 	me.readyState = CONNECTING
 }
 
@@ -56,7 +56,7 @@ func (me *eventSource) connect() error {
 // Method consume() must be called once connect() succeeds.
 // It parses the input reader and assigns the event output channel accordingly.
 func (me *eventSource) consume() {
-	me.out = Decode(me.in)
+	me.out = DefaultDecoder.Decode(me.in)
 }
 
 // Returns the event source URL.
