@@ -15,6 +15,7 @@ type (
 		URL() string
 		ReadyState() byte
 		Events() <-chan Event
+		Close()
 	}
 	eventSource struct {
 		url        string
@@ -73,4 +74,11 @@ func (me *eventSource) ReadyState() byte {
 // are received.
 func (me *eventSource) Events() <-chan Event {
 	return me.out
+}
+
+// Closes the event source.
+// After closing the event source, it cannot be reused again.
+func (me *eventSource) Close() {
+	me.in.Close()
+	me.readyState = STATUS_CLOSED
 }
