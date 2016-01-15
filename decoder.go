@@ -12,6 +12,11 @@ const (
 
 var (
 	DefaultDecoder = &decoder{defaultBufferSize}
+
+	bytesLF    = []byte("\n")
+	bytesCRLF  = []byte("\r\n")
+	bytesSPACE = []byte(" ")
+	bytesCOLON = []byte(":")
 )
 
 type (
@@ -56,7 +61,7 @@ func process(in *bufio.Reader, out chan Event) {
 		}
 
 		// Dispatch event
-		if bytes.Equal(line, []byte("\n")) || bytes.Equal(line, []byte("\r\n")) {
+		if bytes.Equal(line, bytesLF) || bytes.Equal(line, bytesCRLF) {
 			// Skip event if Data buffer its empty
 			if dataBuffer.Len() == 0 {
 				dataBuffer.Reset()
@@ -67,7 +72,7 @@ func process(in *bufio.Reader, out chan Event) {
 			data := dataBuffer.Bytes()
 
 			// Trim last byte if line feed
-			data = bytes.TrimSuffix(data, []byte("\n"))
+			data = bytes.TrimSuffix(data, bytesLF)
 
 			// Create event
 			event := newEvent("", eventType.String(), data)
@@ -81,10 +86,7 @@ func process(in *bufio.Reader, out chan Event) {
 			continue
 		}
 
-		// Ignore line
-		if line[0] == ':' {
-			continue
-		}
+		colonIndex := bytes.Index(line, bytesCOLON)
 
 		// Sanitise line feeds
 		line = sanitise(line)
@@ -92,14 +94,17 @@ func process(in *bufio.Reader, out chan Event) {
 		// Extract field/value for current line
 		field.Reset()
 		value.Reset()
-		colonIndex := bytes.Index(line, []byte(":"))
-		if colonIndex != -1 {
+
+		switch colonIndex {
+		case 0:
+			continue
+		case -1:
+			field.Write(line)
+		default:
 			field.Write(line[:colonIndex])
 			line = line[colonIndex+1:]
-			line = bytes.TrimPrefix(line, []byte(" "))
+			line = bytes.TrimPrefix(line, bytesSPACE)
 			value.Write(line)
-		} else {
-			field.Write(line)
 		}
 
 		// Process field
@@ -120,10 +125,10 @@ func process(in *bufio.Reader, out chan Event) {
 
 // Sanitises line feed ending.
 func sanitise(line []byte) []byte {
-	if bytes.HasSuffix(line, []byte("\r\n")) {
-		line = bytes.TrimSuffix(line, []byte("\r\n"))
+	if bytes.HasSuffix(line, bytesCRLF) {
+		line = bytes.TrimSuffix(line, bytesCRLF)
 	} else {
-		line = bytes.TrimSuffix(line, []byte("\n"))
+		line = bytes.TrimSuffix(line, bytesLF)
 	}
 	return line
 }
