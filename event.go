@@ -2,9 +2,9 @@ package sse
 
 type (
 	Event interface {
-		Id() string
-		Name() string
-		Data() []byte
+		Id() (id string)
+		Name() (name string)
+		Data() (data []byte)
 	}
 	event struct {
 		id   string
@@ -13,7 +13,7 @@ type (
 	}
 )
 
-func newEvent(id, name string, data []byte) Event {
+func newEvent(id, name string, data []byte) *event {
 	e := &event{}
 	e.initialise(id, name, data)
 	return e

@@ -12,16 +12,18 @@ const (
 
 type (
 	EventSource interface {
-		URL() string
-		ReadyState() byte
-		Events() <-chan Event
+		URL() (url string)
+		ReadyState() (state byte)
+		LastEventId() (id string)
+		Events() (events <-chan Event)
 		Close()
 	}
 	eventSource struct {
-		url        string
-		in         io.ReadCloser
-		out        <-chan Event
-		readyState byte
+		lastEventId string
+		url         string
+		in          io.ReadCloser
+		out         <-chan Event
+		readyState  byte
 	}
 )
 
@@ -38,11 +40,12 @@ func (me *eventSource) initialise(url string) {
 	me.url = url
 	me.in = nil
 	me.out = nil
+	me.lastEventId = ""
 	me.readyState = STATUS_CONNECTING
 }
 
 // Attempts to connect and updates internal status depending on the outcome.
-func (me *eventSource) connect() error {
+func (me *eventSource) connect() (err error) {
 	response, err := httpConnectToSSE(me.url)
 	if err != nil {
 		me.readyState = STATUS_CLOSED
@@ -57,7 +60,27 @@ func (me *eventSource) connect() error {
 // Method consume() must be called once connect() succeeds.
 // It parses the input reader and assigns the event output channel accordingly.
 func (me *eventSource) consume() {
-	me.out = DefaultDecoder.Decode(me.in)
+	me.out = me.wrap(DefaultDecoder.Decode(me.in))
+}
+
+// Wraps an input of events, updates internal state for lastEventId
+// and forwards the events to the final output.
+func (me *eventSource) wrap(in <-chan Event) <-chan Event {
+	out := make(chan Event)
+	go func() {
+		for {
+			select {
+			case ev, ok := <-in:
+				if !ok {
+					close(out)
+					return
+				}
+				me.lastEventId = ev.Id()
+				out <- ev
+			}
+		}
+	}()
+	return out
 }
 
 // Returns the event source URL.
@@ -68,6 +91,11 @@ func (me *eventSource) URL() string {
 // Returns the event source connection state, either connecting, open or closed.
 func (me *eventSource) ReadyState() byte {
 	return me.readyState
+}
+
+// Returns the last event source Event id.
+func (me *eventSource) LastEventId() string {
+	return me.lastEventId
 }
 
 // Returns the channel of events. Events will be queued in the channel as they

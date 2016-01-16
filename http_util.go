@@ -28,8 +28,8 @@ func (me ErrHttpContentType) Error() string {
 
 // Attempts to open an HTTP connection, validates that the server supports
 // Server-Sent Events on the URL.
-func httpConnectToSSE(url string) (*http.Response, error) {
-	response, err := http.Get(url)
+func httpConnectToSSE(url string) (response *http.Response, err error) {
+	response, err = http.Get(url)
 	if err != nil {
 		return response, err
 	}

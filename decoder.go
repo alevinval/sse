@@ -48,7 +48,7 @@ func (me *decoder) Decode(reader io.Reader) <-chan Event {
 // This function is intended to run in a go-routine.
 func process(in *bufio.Reader, out chan Event) {
 	// Stores event data, which is filled after one or many lines from the reader
-	var eventType, dataBuffer = new(bytes.Buffer), new(bytes.Buffer)
+	var eventId, eventType, dataBuffer = new(bytes.Buffer), new(bytes.Buffer), new(bytes.Buffer)
 
 	// Stores data about the current line being processed
 	var field, value = new(bytes.Buffer), new(bytes.Buffer)
@@ -75,7 +75,7 @@ func process(in *bufio.Reader, out chan Event) {
 			data = bytes.TrimSuffix(data, bytesLF)
 
 			// Create event
-			event := newEvent("", eventType.String(), data)
+			event := newEvent(eventId.String(), eventType.String(), data)
 
 			// Clear event buffers
 			eventType.Reset()
@@ -115,8 +115,12 @@ func process(in *bufio.Reader, out chan Event) {
 		case "data":
 			dataBuffer.Write(value.Bytes())
 			dataBuffer.WriteByte('\n')
-		case "id", "retry":
-			// TODO(alevinval): unused at the moment, together with reconnection time
+		case "id":
+			eventId.Reset()
+			eventId.Write(value.Bytes())
+		case "retry":
+			// TODO(alevinval): unused at the moment, will need refactor
+			// or change on the internal API, as decoder has no knowledge on the underlying connection.
 		default:
 			// Ignore field
 		}
