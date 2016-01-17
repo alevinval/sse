@@ -1,6 +1,7 @@
 # HTML5 Server-Sent Events client for Golang
 
 [![Build Status](https://travis-ci.org/mubit/sse.svg?branch=master)](https://travis-ci.org/mubit/sse)
+[![GoDoc](https://godoc.org/github.com/mubit/sse?status.svg)](https://godoc.org/github.com/mubit/sse)
 
 ## What is sse?
 
