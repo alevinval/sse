@@ -5,21 +5,25 @@ import (
 )
 
 const (
-	STATUS_CONNECTING byte = iota
-	STATUS_OPEN
-	STATUS_CLOSED
+	// StatusConnecting is the status of the EventSource before it tries to establish connection with the server.
+	StatusConnecting byte = iota
+	// StatusOpen after it connects to the server.
+	StatusOpen
+	// StatusClosed after the connection is closed.
+	StatusClosed
 )
 
 type (
+	// EventSource connects and processes events from an SSE stream.
 	EventSource interface {
 		URL() (url string)
 		ReadyState() (state byte)
-		LastEventId() (id string)
+		LastEventID() (id string)
 		Events() (events <-chan Event)
 		Close()
 	}
 	eventSource struct {
-		lastEventId string
+		lastEventID string
 		url         string
 		in          io.ReadCloser
 		out         <-chan Event
@@ -27,8 +31,7 @@ type (
 	}
 )
 
-// Constructs a new EventSource struct that satisfies the HTML5
-// EventSource interface.
+// NewEventSource constructs returns an EventSource that satisfies the HTML5 EventSource specification.
 func NewEventSource(url string) (EventSource, error) {
 	es := &eventSource{}
 	es.initialise(url)
@@ -36,36 +39,36 @@ func NewEventSource(url string) (EventSource, error) {
 	return es, err
 }
 
-func (me *eventSource) initialise(url string) {
-	me.url = url
-	me.in = nil
-	me.out = nil
-	me.lastEventId = ""
-	me.readyState = STATUS_CONNECTING
+func (es *eventSource) initialise(url string) {
+	es.url = url
+	es.in = nil
+	es.out = nil
+	es.lastEventID = ""
+	es.readyState = StatusConnecting
 }
 
 // Attempts to connect and updates internal status depending on the outcome.
-func (me *eventSource) connect() (err error) {
-	response, err := httpConnectToSSE(me.url)
+func (es *eventSource) connect() (err error) {
+	response, err := httpConnectToSSE(es.url)
 	if err != nil {
-		me.readyState = STATUS_CLOSED
+		es.readyState = StatusClosed
 		return err
 	}
-	me.in = response.Body
-	me.consume()
-	me.readyState = STATUS_OPEN
+	es.in = response.Body
+	es.consume()
+	es.readyState = StatusOpen
 	return nil
 }
 
 // Method consume() must be called once connect() succeeds.
 // It parses the input reader and assigns the event output channel accordingly.
-func (me *eventSource) consume() {
-	me.out = me.wrap(DefaultDecoder.Decode(me.in))
+func (es *eventSource) consume() {
+	es.out = es.wrap(DefaultDecoder.Decode(es.in))
 }
 
 // Wraps an input of events, updates internal state for lastEventId
 // and forwards the events to the final output.
-func (me *eventSource) wrap(in <-chan Event) <-chan Event {
+func (es *eventSource) wrap(in <-chan Event) <-chan Event {
 	out := make(chan Event)
 	go func() {
 		for {
@@ -75,7 +78,7 @@ func (me *eventSource) wrap(in <-chan Event) <-chan Event {
 					close(out)
 					return
 				}
-				me.lastEventId = ev.Id()
+				es.lastEventID = ev.ID()
 				out <- ev
 			}
 		}
@@ -84,29 +87,29 @@ func (me *eventSource) wrap(in <-chan Event) <-chan Event {
 }
 
 // Returns the event source URL.
-func (me *eventSource) URL() string {
-	return me.url
+func (es *eventSource) URL() string {
+	return es.url
 }
 
 // Returns the event source connection state, either connecting, open or closed.
-func (me *eventSource) ReadyState() byte {
-	return me.readyState
+func (es *eventSource) ReadyState() byte {
+	return es.readyState
 }
 
 // Returns the last event source Event id.
-func (me *eventSource) LastEventId() string {
-	return me.lastEventId
+func (es *eventSource) LastEventID() string {
+	return es.lastEventID
 }
 
 // Returns the channel of events. Events will be queued in the channel as they
 // are received.
-func (me *eventSource) Events() <-chan Event {
-	return me.out
+func (es *eventSource) Events() <-chan Event {
+	return es.out
 }
 
 // Closes the event source.
 // After closing the event source, it cannot be reused again.
-func (me *eventSource) Close() {
-	me.in.Close()
-	me.readyState = STATUS_CLOSED
+func (es *eventSource) Close() {
+	es.in.Close()
+	es.readyState = StatusClosed
 }

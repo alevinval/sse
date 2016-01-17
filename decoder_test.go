@@ -64,13 +64,13 @@ func TestTwoEventsExample(t *testing.T) {
 func TestStream(t *testing.T) {
 	events := decode(": test stream\n\ndata: first event\nid: 1\n\ndata:second event\nid\n\ndata:  third event\n\n")
 	ev1 := consume(t, events)
-	assert.Equal(t, "1", ev1.Id())
+	assert.Equal(t, "1", ev1.ID())
 	assert.Equal(t, "first event", string(ev1.Data()))
 	ev2 := consume(t, events)
-	assert.Equal(t, "", ev2.Id())
+	assert.Equal(t, "", ev2.ID())
 	assert.Equal(t, "second event", string(ev2.Data()))
 	ev3 := consume(t, events)
-	assert.Equal(t, "", ev3.Id())
+	assert.Equal(t, "", ev3.ID())
 	assert.Equal(t, " third event", string(ev3.Data()))
 }
 

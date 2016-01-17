@@ -1,8 +1,7 @@
-package benchmarks
-
 /*
 
-This package includes benchmarks for the components of the SSE
+Package benchmarks includes benchmarks for the components of the SSE
 library.
 
 */
+package benchmarks

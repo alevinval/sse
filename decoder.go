@@ -11,6 +11,7 @@ const (
 )
 
 var (
+	// DefaultDecoder is the decoder used by EventSource by default.
 	DefaultDecoder = &decoder{defaultBufferSize}
 
 	bytesLF    = []byte("\n")
@@ -20,26 +21,31 @@ var (
 )
 
 type (
+	// Decoder interface decodes events from a reader input
+	Decoder interface {
+		Decode(in io.Reader) (out <-chan Event)
+	}
 	decoder struct {
 		bufferSize int
 	}
 )
 
-func NewDecoder(bufferSize int) *decoder {
+// NewDecoder builds an SSE decoder with the specified buffer size.
+func NewDecoder(bufferSize int) Decoder {
 	d := &decoder{}
 	d.initialise(bufferSize)
 	return d
 }
 
-func (me *decoder) initialise(bufferSize int) {
-	me.bufferSize = bufferSize
+func (d *decoder) initialise(bufferSize int) {
+	d.bufferSize = bufferSize
 }
 
 // Returns a channel of SSE events from a reader input.
-func (me *decoder) Decode(reader io.Reader) <-chan Event {
-	in := bufio.NewReaderSize(reader, me.bufferSize)
+func (d *decoder) Decode(in io.Reader) <-chan Event {
+	buffIn := bufio.NewReaderSize(in, d.bufferSize)
 	out := make(chan Event)
-	go process(in, out)
+	go process(buffIn, out)
 	return out
 }
 
@@ -48,7 +54,7 @@ func (me *decoder) Decode(reader io.Reader) <-chan Event {
 // This function is intended to run in a go-routine.
 func process(in *bufio.Reader, out chan Event) {
 	// Stores event data, which is filled after one or many lines from the reader
-	var eventId, eventType, dataBuffer = new(bytes.Buffer), new(bytes.Buffer), new(bytes.Buffer)
+	var eventID, eventType, dataBuffer = new(bytes.Buffer), new(bytes.Buffer), new(bytes.Buffer)
 
 	// Stores data about the current line being processed
 	var field, value = new(bytes.Buffer), new(bytes.Buffer)
@@ -75,7 +81,7 @@ func process(in *bufio.Reader, out chan Event) {
 			data = bytes.TrimSuffix(data, bytesLF)
 
 			// Create event
-			event := newEvent(eventId.String(), eventType.String(), data)
+			event := newEvent(eventID.String(), eventType.String(), data)
 
 			// Clear event buffers
 			eventType.Reset()
@@ -116,8 +122,8 @@ func process(in *bufio.Reader, out chan Event) {
 			dataBuffer.Write(value.Bytes())
 			dataBuffer.WriteByte('\n')
 		case "id":
-			eventId.Reset()
-			eventId.Write(value.Bytes())
+			eventID.Reset()
+			eventID.Write(value.Bytes())
 		case "retry":
 			// TODO(alevinval): unused at the moment, will need refactor
 			// or change on the internal API, as decoder has no knowledge on the underlying connection.
