@@ -2,10 +2,11 @@ package sse_test
 
 import (
 	"bytes"
-	"github.com/mubit/sse"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/mubit/sse"
+	"github.com/stretchr/testify/assert"
 )
 
 // Timeouts after the specified milliseconds
@@ -39,21 +40,44 @@ func consume(t *testing.T, events <-chan sse.Event) sse.Event {
 	}
 }
 
+func TestEventNameAndData(t *testing.T) {
+	events := decode("event: some event\r\ndata: some event value\r\n\n")
+	ev := consume(t, events)
+	assert.Equal(t, "some event", ev.Name())
+	assert.Equal(t, "some event value", string(ev.Data()))
+}
+
+func TestEventNameAndDataManyEvents(t *testing.T) {
+	events := decode("event: first event\r\ndata: first value\r\n\nevent: second event\r\ndata: second value\r\n\n")
+	ev1 := consume(t, events)
+	assert.Equal(t, "first event", ev1.Name())
+	assert.Equal(t, "first value", string(ev1.Data()))
+	ev2 := consume(t, events)
+	assert.Equal(t, "second event", ev2.Name())
+	assert.Equal(t, "second value", string(ev2.Data()))
+}
+
 func TestStocksExample(t *testing.T) {
 	events := decode("data: YHOO\ndata: +2\ndata: 10\n\n")
 	ev := consume(t, events)
 	assert.Equal(t, "YHOO\n+2\n10", string(ev.Data()))
 }
 
-func TestIgnoredSpaceProducesTwoIdenticalEvents(t *testing.T) {
-	events := decode("data:test\n\ndata: test\n\n")
+func TestFirstWhitespaceIsIgnored(t *testing.T) {
+	events := decode("data: first\n\ndata: second\n\n")
 	ev1 := consume(t, events)
-	assert.Equal(t, "test", string(ev1.Data()))
+	assert.Equal(t, "first", string(ev1.Data()))
 	ev2 := consume(t, events)
-	assert.Equal(t, "test", string(ev2.Data()))
+	assert.Equal(t, "second", string(ev2.Data()))
 }
 
-func TestTwoEventsExample(t *testing.T) {
+func TestOnlyOneWhitespaceIsIgnored(t *testing.T) {
+	events := decode("data:   first\n\n") // 3 whitespaces
+	ev := consume(t, events)
+	assert.Equal(t, "  first", string(ev.Data())) // 2 whitespaces
+}
+
+func TestEventsWithNoDataThenWithNewLine(t *testing.T) {
 	events := decode("data\n\ndata\ndata\n\ndata:")
 	ev1 := consume(t, events)
 	assert.Equal(t, "", string(ev1.Data()))
@@ -61,7 +85,7 @@ func TestTwoEventsExample(t *testing.T) {
 	assert.Equal(t, "\n", string(ev2.Data()))
 }
 
-func TestStream(t *testing.T) {
+func TestCommentIsIgnoredAndDataIsNot(t *testing.T) {
 	events := decode(": test stream\n\ndata: first event\nid: 1\n\ndata:second event\nid\n\ndata:  third event\n\n")
 	ev1 := consume(t, events)
 	assert.Equal(t, "1", ev1.ID())

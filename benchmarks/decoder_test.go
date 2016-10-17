@@ -2,9 +2,10 @@ package benchmarks_test
 
 import (
 	"bytes"
-	"github.com/mubit/sse"
 	"testing"
 	"time"
+
+	"github.com/mubit/sse"
 )
 
 func doDecodingBenchmark(b *testing.B, data []byte) {
