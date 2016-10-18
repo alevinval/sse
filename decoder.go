@@ -66,7 +66,11 @@ func process(in *bufio.Reader, out chan Event) {
 			return
 		}
 
-		// Dispatch event
+		// Dispatch the event.
+		// Note the event source spec as defined by w3.org requires skips the event dispatching if
+		// the event name collides with the name of any event as defined in the DOM Events spec.
+		// Decoder does not perform this check, hence it could yield events that would not be valid
+		// in a browser.
 		if bytes.Equal(line, bytesLF) || bytes.Equal(line, bytesCRLF) {
 			// Skip event if Data buffer its empty
 			if dataBuffer.Len() == 0 {
