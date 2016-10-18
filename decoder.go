@@ -10,14 +10,16 @@ const (
 	defaultBufferSize = 8096
 )
 
+const (
+	byteLF    = '\n'
+	byteCR    = '\r'
+	byteSPACE = ' '
+	byteCOLON = ':'
+)
+
 var (
 	// DefaultDecoder is the decoder used by EventSource by default.
 	DefaultDecoder = NewDecoder(defaultBufferSize)
-
-	bytesLF    = []byte("\n")
-	bytesCRLF  = []byte("\r\n")
-	bytesSPACE = []byte(" ")
-	bytesCOLON = []byte(":")
 )
 
 type (
@@ -60,19 +62,19 @@ func process(in *bufio.Reader, out chan Event) {
 	var field, value = new(bytes.Buffer), new(bytes.Buffer)
 
 	for {
-		line, err := in.ReadSlice('\n')
+		line, err := in.ReadSlice(byteLF)
 		if err != nil {
 			close(out)
 			return
 		}
 
-		// Dispatch the event.
+		// Empty line? => Dispatch event
 		// Note the event source spec as defined by w3.org requires skips the event dispatching if
 		// the event name collides with the name of any event as defined in the DOM Events spec.
 		// Decoder does not perform this check, hence it could yield events that would not be valid
 		// in a browser.
-		if bytes.Equal(line, bytesLF) || bytes.Equal(line, bytesCRLF) {
-			// Skip event if Data buffer its empty
+		if len(line) == 1 || (len(line) == 2 && line[0] == byteCR) {
+			// Skip event if Data buffer is empty
 			if dataBuffer.Len() == 0 {
 				dataBuffer.Reset()
 				eventType.Reset()
@@ -82,7 +84,9 @@ func process(in *bufio.Reader, out chan Event) {
 			data := dataBuffer.Bytes()
 
 			// Trim last byte if line feed
-			data = bytes.TrimSuffix(data, bytesLF)
+			if data[len(data)-1] == byteLF {
+				data = data[:len(data)-1]
+			}
 
 			// Create event
 			event := newEvent(eventID.String(), eventType.String(), data)
@@ -103,7 +107,7 @@ func process(in *bufio.Reader, out chan Event) {
 		field.Reset()
 		value.Reset()
 
-		colonIndex := bytes.Index(line, bytesCOLON)
+		colonIndex := bytes.IndexByte(line, byteCOLON)
 		switch colonIndex {
 		case 0:
 			continue
@@ -112,7 +116,10 @@ func process(in *bufio.Reader, out chan Event) {
 		default:
 			field.Write(line[:colonIndex])
 			line = line[colonIndex+1:]
-			line = bytes.TrimPrefix(line, bytesSPACE)
+			// Trim prefixed space.
+			if len(line) > 0 && line[0] == byteSPACE {
+				line = line[1:]
+			}
 			value.Write(line)
 		}
 
@@ -123,7 +130,7 @@ func process(in *bufio.Reader, out chan Event) {
 			eventType.Write(value.Bytes())
 		case "data":
 			dataBuffer.Write(value.Bytes())
-			dataBuffer.WriteByte('\n')
+			dataBuffer.WriteByte(byteLF)
 		case "id":
 			eventID.Reset()
 			eventID.Write(value.Bytes())
@@ -138,9 +145,15 @@ func process(in *bufio.Reader, out chan Event) {
 
 // Sanitises line feed ending.
 func sanitiseLineFeed(line []byte) []byte {
-	if bytes.HasSuffix(line, bytesCRLF) {
-		return bytes.TrimSuffix(line, bytesCRLF)
-	} else {
-		return bytes.TrimSuffix(line, bytesLF)
+	l := len(line)
+	// Trim LF
+	if l > 0 && line[l-1] == byteLF {
+		l--
+		// Trim CR
+		if l > 0 && line[l-1] == byteCR {
+			l--
+		}
+		line = line[:l]
 	}
+	return line
 }
