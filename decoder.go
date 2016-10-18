@@ -95,7 +95,7 @@ func process(in *bufio.Reader, out chan Event) {
 		colonIndex := bytes.Index(line, bytesCOLON)
 
 		// Sanitise line feeds
-		line = sanitise(line)
+		line = sanitiseLineFeed(line)
 
 		// Extract field/value for current line
 		field.Reset()
@@ -134,7 +134,7 @@ func process(in *bufio.Reader, out chan Event) {
 }
 
 // Sanitises line feed ending.
-func sanitise(line []byte) []byte {
+func sanitiseLineFeed(line []byte) []byte {
 	if bytes.HasSuffix(line, bytesCRLF) {
 		line = bytes.TrimSuffix(line, bytesCRLF)
 	} else {
