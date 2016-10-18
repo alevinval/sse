@@ -20,9 +20,6 @@ const (
 var (
 	// DefaultDecoder is the decoder used by EventSource by default.
 	DefaultDecoder = &decoder{defaultBufferSize}
-
-	bytesLF   = []byte{byteLF}
-	bytesCRLF = []byte{byteCR, byteLF}
 )
 
 type (
@@ -65,15 +62,15 @@ func process(in *bufio.Reader, out chan Event) {
 	var field, value = new(bytes.Buffer), new(bytes.Buffer)
 
 	for {
-		line, err := in.ReadSlice('\n')
+		line, err := in.ReadSlice(byteLF)
 		if err != nil {
 			close(out)
 			return
 		}
 
-		// Dispatch event
-		if bytes.Equal(line, bytesLF) || bytes.Equal(line, bytesCRLF) {
-			// Skip event if Data buffer its empty
+		// Empty line? => Dispatch event
+		if len(line) == 1 || (len(line) == 2 && line[0] == byteCR) {
+			// Skip event if Data buffer is empty
 			if dataBuffer.Len() == 0 {
 				dataBuffer.Reset()
 				eventType.Reset()
@@ -83,7 +80,9 @@ func process(in *bufio.Reader, out chan Event) {
 			data := dataBuffer.Bytes()
 
 			// Trim last byte if line feed
-			data = bytes.TrimSuffix(data, bytesLF)
+			if data[len(data)-1] == byteLF {
+				data = data[:len(data)-1]
+			}
 
 			// Create event
 			event := newEvent(eventID.String(), eventType.String(), data)
@@ -127,7 +126,7 @@ func process(in *bufio.Reader, out chan Event) {
 			eventType.Write(value.Bytes())
 		case "data":
 			dataBuffer.Write(value.Bytes())
-			dataBuffer.WriteByte('\n')
+			dataBuffer.WriteByte(byteLF)
 		case "id":
 			eventID.Reset()
 			eventID.Write(value.Bytes())
@@ -142,10 +141,15 @@ func process(in *bufio.Reader, out chan Event) {
 
 // Sanitises line feed ending.
 func sanitiseLineFeed(line []byte) []byte {
-	if bytes.HasSuffix(line, bytesCRLF) {
-		line = bytes.TrimSuffix(line, bytesCRLF)
-	} else {
-		line = bytes.TrimSuffix(line, bytesLF)
+	l := len(line)
+	// Trim LF
+	if l > 0 && line[l-1] == byteLF {
+		l--
+		// Trim CR
+		if l > 0 && line[l-1] == byteCR {
+			l--
+		}
+		line = line[:l]
 	}
 	return line
 }
