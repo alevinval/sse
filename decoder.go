@@ -10,14 +10,19 @@ const (
 	defaultBufferSize = 8096
 )
 
+const (
+	byteLF    = '\n'
+	byteCR    = '\r'
+	byteSPACE = ' '
+	byteCOLON = ':'
+)
+
 var (
 	// DefaultDecoder is the decoder used by EventSource by default.
 	DefaultDecoder = &decoder{defaultBufferSize}
 
-	bytesLF    = []byte("\n")
-	bytesCRLF  = []byte("\r\n")
-	bytesSPACE = []byte(" ")
-	bytesCOLON = []byte(":")
+	bytesLF   = []byte{byteLF}
+	bytesCRLF = []byte{byteCR, byteLF}
 )
 
 type (
@@ -92,7 +97,7 @@ func process(in *bufio.Reader, out chan Event) {
 			continue
 		}
 
-		colonIndex := bytes.Index(line, bytesCOLON)
+		colonIndex := bytes.IndexByte(line, byteCOLON)
 
 		// Sanitise line feeds
 		line = sanitiseLineFeed(line)
@@ -109,7 +114,9 @@ func process(in *bufio.Reader, out chan Event) {
 		default:
 			field.Write(line[:colonIndex])
 			line = line[colonIndex+1:]
-			line = bytes.TrimPrefix(line, bytesSPACE)
+			if len(line) > 0 && line[0] == byteSPACE {
+				line = line[1:]
+			}
 			value.Write(line)
 		}
 
