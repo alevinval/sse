@@ -12,7 +12,7 @@ const (
 
 var (
 	// DefaultDecoder is the decoder used by EventSource by default.
-	DefaultDecoder = &decoder{defaultBufferSize}
+	DefaultDecoder = NewDecoder(defaultBufferSize)
 
 	bytesLF    = []byte("\n")
 	bytesCRLF  = []byte("\r\n")
@@ -92,8 +92,6 @@ func process(in *bufio.Reader, out chan Event) {
 			continue
 		}
 
-		colonIndex := bytes.Index(line, bytesCOLON)
-
 		// Sanitise line feeds
 		line = sanitiseLineFeed(line)
 
@@ -101,6 +99,7 @@ func process(in *bufio.Reader, out chan Event) {
 		field.Reset()
 		value.Reset()
 
+		colonIndex := bytes.Index(line, bytesCOLON)
 		switch colonIndex {
 		case 0:
 			continue
@@ -136,9 +135,8 @@ func process(in *bufio.Reader, out chan Event) {
 // Sanitises line feed ending.
 func sanitiseLineFeed(line []byte) []byte {
 	if bytes.HasSuffix(line, bytesCRLF) {
-		line = bytes.TrimSuffix(line, bytesCRLF)
+		return bytes.TrimSuffix(line, bytesCRLF)
 	} else {
-		line = bytes.TrimSuffix(line, bytesLF)
+		return bytes.TrimSuffix(line, bytesLF)
 	}
-	return line
 }
