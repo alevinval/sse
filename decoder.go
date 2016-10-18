@@ -117,7 +117,7 @@ func process(in *bufio.Reader, out chan Event) {
 		fieldName := field.String()
 		switch fieldName {
 		case "event":
-			eventType.WriteString(value.String())
+			eventType.Write(value.Bytes())
 		case "data":
 			dataBuffer.Write(value.Bytes())
 			dataBuffer.WriteByte('\n')
