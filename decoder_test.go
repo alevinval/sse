@@ -135,3 +135,12 @@ func TestNewLineWithCR(t *testing.T) {
 	assert.Equal(t, "name", ev.Name())
 	assert.Equal(t, "some\n data", string(ev.Data()))
 }
+
+// Bug #4: decoder: pure CR not recognized as end of line #4
+func TestPureLineFeedsWithCarriageReturn(t *testing.T) {
+	decoder := newDecoder("event: name\rdata: some\rdata:  data\r\r")
+	ev, err := decoder.Decode()
+	assert.Nil(t, err)
+	assert.Equal(t, "name", ev.Name())
+	assert.Equal(t, "some\n data", string(ev.Data()))
+}
