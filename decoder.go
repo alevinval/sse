@@ -34,11 +34,12 @@ type (
 	}
 )
 
-// NewDecoder builds an SSE decoder with the specified buffer size.
+// NewDecoder creates a SSE decoder with the default buffer size.
 func NewDecoder(in io.Reader) Decoder {
 	return NewDecoderSize(in, defaultBufferSize)
 }
 
+// NewDecoderSize creates a SSE decoder with the specified buffer size.
 func NewDecoderSize(r io.Reader, bufferSize int) Decoder {
 	d := new(decoder)
 	d.initialise(r, bufferSize)
@@ -59,7 +60,7 @@ func (d *decoder) initialise(r io.Reader, bufferSize int) {
 	d.value = new(bytes.Buffer)
 }
 
-// Returns a channel of SSE events from a reader input.
+// Decode reads the input stream and interprets the events in it. Any error while reading is  returned.
 func (d *decoder) Decode() (Event, error) {
 	for {
 		line, err := d.r.ReadBytes(byteLF)

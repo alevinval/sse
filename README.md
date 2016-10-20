@@ -4,7 +4,7 @@
 [![GoDoc](https://godoc.org/github.com/mubit/sse?status.svg)](https://godoc.org/github.com/mubit/sse)
 
 This package provides a fast Decoder to consume ServerSentEvents (SSE) in
-compliance to the the HTML5 standard.
+compliance to the the [HTML5 standard](https://html.spec.whatwg.org/multipage/comms.html).
 
 ## Installing
 
@@ -18,11 +18,11 @@ compliance to the the HTML5 standard.
 
 # Considerations
 
-- Not used in production tested, that I am aware.
+- Not used in production, that I am aware.
 
 - Decoder performance could drop due memory copy when the SSE stream
-to be consumed provides line feeds using CRLF (`\r\n`), if you can,
-rather use LF (`n`) to avoid the penalty.
+to be consumed provides line feeds using CRLF (`\r\n`), the library
+performs best when LF (`n`) is used.
 
-- This package intends to be fully spec compliant, however, it might not be
-there yet. If you find one, do not hesitate to file a bug.
+- This package intends to be spec compliant, however: it might not be
+there yet. If you find a bug, do not hesitate to report it.
