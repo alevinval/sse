@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/mubit/sse"
+	"github.com/mubit/sse/tests"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,6 +20,16 @@ func TestEOFIsReturned(t *testing.T) {
 	decoder := newDecoder("")
 	_, err := decoder.Decode()
 	assert.Equal(t, io.EOF, err)
+}
+
+func TestBigEventGrowsTheBuffer(t *testing.T) {
+	bigEvent := tests.NewEventWithPadding(32000)
+	decoder := newDecoder(string(bigEvent))
+
+	ev, err := decoder.Decode()
+	assert.Nil(t, err)
+	actualLength := len(ev.Data()) + len(ev.Name()) + 8
+	assert.Equal(t, 32000, actualLength)
 }
 
 func TestEventNameAndData(t *testing.T) {

@@ -5,12 +5,13 @@ import (
 	"testing"
 
 	"github.com/mubit/sse"
+	"github.com/mubit/sse/tests"
 )
 
 func runDecodingBenchmark(b *testing.B, data []byte) {
 	reader := bytes.NewReader(data)
-	decoder := sse.NewDecoder(reader)
 	b.ResetTimer()
+	decoder := sse.NewDecoder(reader)
 	for i := 0; i < b.N; i++ {
 		decoder.Decode()
 		reader.Seek(0, 0)
@@ -32,27 +33,18 @@ func BenchmarkDecodeShortEvent(b *testing.B) {
 	runDecodingBenchmark(b, event)
 }
 
-func createEventWithPadding(size int) []byte {
-	event := []byte("data: ")
-	paddingByte := byte('e')
-	for x := 0; x < size-8; x++ {
-		event = append(event, paddingByte)
-	}
-	return append(event, []byte("\n\n")...)
-}
-
 func BenchmarkDecode1kEvent(b *testing.B) {
-	runDecodingBenchmark(b, createEventWithPadding(1000))
+	runDecodingBenchmark(b, tests.NewEventWithPadding(1000))
 }
 
 func BenchmarkDecode4kEvent(b *testing.B) {
-	runDecodingBenchmark(b, createEventWithPadding(4000))
+	runDecodingBenchmark(b, tests.NewEventWithPadding(4000))
 }
 
 func BenchmarkDecode8kEvent(b *testing.B) {
-	runDecodingBenchmark(b, createEventWithPadding(8000))
+	runDecodingBenchmark(b, tests.NewEventWithPadding(8000))
 }
 
 func BenchmarkDecode16kEvent(b *testing.B) {
-	runDecodingBenchmark(b, createEventWithPadding(16000))
+	runDecodingBenchmark(b, tests.NewEventWithPadding(16000))
 }
