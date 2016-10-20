@@ -26,7 +26,7 @@ type (
 		lastEventID string
 		url         string
 		in          io.ReadCloser
-		out         <-chan Event
+		out         chan Event
 		readyState  byte
 	}
 )
@@ -63,27 +63,19 @@ func (es *eventSource) connect() (err error) {
 // Method consume() must be called once connect() succeeds.
 // It parses the input reader and assigns the event output channel accordingly.
 func (es *eventSource) consume() {
-	es.out = es.wrap(DefaultDecoder.Decode(es.in))
-}
-
-// Wraps an input of events, updates internal state for lastEventId
-// and forwards the events to the final output.
-func (es *eventSource) wrap(in <-chan Event) <-chan Event {
-	out := make(chan Event)
+	es.out = make(chan Event)
 	go func() {
+		var decoder = NewDecoder(es.in)
 		for {
-			select {
-			case ev, ok := <-in:
-				if !ok {
-					close(out)
-					return
-				}
-				es.lastEventID = ev.ID()
-				out <- ev
+			ev, err := decoder.Decode()
+			if err != nil {
+				close(es.out)
+				return
 			}
+			es.lastEventID = ev.ID()
+			es.out <- ev
 		}
 	}()
-	return out
 }
 
 // Returns the event source URL.

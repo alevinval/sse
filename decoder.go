@@ -17,55 +17,54 @@ const (
 	byteCOLON = ':'
 )
 
-var (
-	// DefaultDecoder is the decoder used by EventSource by default.
-	DefaultDecoder = NewDecoder(defaultBufferSize)
-)
-
 type (
 	// Decoder interface decodes events from a reader input
 	Decoder interface {
-		Decode(in io.Reader) (out <-chan Event)
+		Decode() (Event, error)
 	}
 	decoder struct {
-		bufferSize int
+		r *bufio.Reader
+
+		// Buffers
+		eventID    *bytes.Buffer
+		eventType  *bytes.Buffer
+		dataBuffer *bytes.Buffer
+		field      *bytes.Buffer
+		value      *bytes.Buffer
 	}
 )
 
 // NewDecoder builds an SSE decoder with the specified buffer size.
-func NewDecoder(bufferSize int) Decoder {
-	d := &decoder{}
-	d.initialise(bufferSize)
+func NewDecoder(in io.Reader) Decoder {
+	return NewDecoderSize(in, defaultBufferSize)
+}
+
+func NewDecoderSize(r io.Reader, bufferSize int) Decoder {
+	d := new(decoder)
+	d.initialise(r, bufferSize)
 	return d
 }
 
-func (d *decoder) initialise(bufferSize int) {
-	d.bufferSize = bufferSize
+func (d *decoder) initialise(r io.Reader, bufferSize int) {
+	normalizer := lineFeedNormalizer{r: r}
+	d.r = bufio.NewReaderSize(&normalizer, bufferSize)
+
+	// Event buffers
+	d.eventID = new(bytes.Buffer)
+	d.eventType = new(bytes.Buffer)
+	d.dataBuffer = new(bytes.Buffer)
+
+	// Parsing buffers
+	d.field = new(bytes.Buffer)
+	d.value = new(bytes.Buffer)
 }
 
 // Returns a channel of SSE events from a reader input.
-func (d *decoder) Decode(in io.Reader) <-chan Event {
-	buffIn := bufio.NewReaderSize(in, d.bufferSize)
-	out := make(chan Event)
-	go process(buffIn, out)
-	return out
-}
-
-// Processes a reader and sends the parsed SSE events
-// to the output channel.
-// This function is intended to run in a go-routine.
-func process(in *bufio.Reader, out chan Event) {
-	// Stores event data, which is filled after one or many lines from the reader
-	var eventID, eventType, dataBuffer = new(bytes.Buffer), new(bytes.Buffer), new(bytes.Buffer)
-
-	// Stores data about the current line being processed
-	var field, value = new(bytes.Buffer), new(bytes.Buffer)
-
+func (d *decoder) Decode() (Event, error) {
 	for {
-		line, err := in.ReadSlice(byteLF)
+		line, err := d.r.ReadBytes(byteLF)
 		if err != nil {
-			close(out)
-			return
+			return nil, err
 		}
 
 		// Empty line? => Dispatch event
@@ -73,67 +72,61 @@ func process(in *bufio.Reader, out chan Event) {
 		// the event name collides with the name of any event as defined in the DOM Events spec.
 		// Decoder does not perform this check, hence it could yield events that would not be valid
 		// in a browser.
-		if len(line) == 1 || (len(line) == 2 && line[0] == byteCR) {
+		if len(line) == 1 {
 			// Skip event if Data buffer is empty
-			if dataBuffer.Len() == 0 {
-				dataBuffer.Reset()
-				eventType.Reset()
+			if d.dataBuffer.Len() == 0 {
+				d.dataBuffer.Reset()
+				d.eventType.Reset()
 				continue
 			}
 
-			data := dataBuffer.Bytes()
+			data := d.dataBuffer.Bytes()
 
-			// Trim last byte if line feed
-			if data[len(data)-1] == byteLF {
-				data = data[:len(data)-1]
-			}
+			// Remove line feed, bounds already checked.
+			data = unsafeTrimSuffixByte(data, byteLF)
 
 			// Create event
-			event := newEvent(eventID.String(), eventType.String(), data)
+			event := newEvent(d.eventID.String(), d.eventType.String(), data)
 
 			// Clear event buffers
-			eventType.Reset()
-			dataBuffer.Reset()
+			d.eventType.Reset()
+			d.dataBuffer.Reset()
 
 			// Dispatch event
-			out <- event
-			continue
+			return event, nil
 		}
 
-		// Sanitise line feeds
-		line = sanitiseLineFeed(line)
+		// Remove line feed, bounds already checked.
+		line = unsafeTrimSuffixByte(line, byteLF)
 
 		// Extract field/value for current line
-		field.Reset()
-		value.Reset()
+		d.field.Reset()
+		d.value.Reset()
 
 		colonIndex := bytes.IndexByte(line, byteCOLON)
 		switch colonIndex {
 		case 0:
 			continue
 		case -1:
-			field.Write(line)
+			d.field.Write(line)
 		default:
-			field.Write(line[:colonIndex])
+			d.field.Write(line[:colonIndex])
 			line = line[colonIndex+1:]
-			// Trim prefixed space.
-			if len(line) > 0 && line[0] == byteSPACE {
-				line = line[1:]
-			}
-			value.Write(line)
+			line = trimPrefixByte(line, byteSPACE)
+			d.value.Write(line)
 		}
 
 		// Process field
-		fieldName := field.String()
+		fieldName := d.field.String()
 		switch fieldName {
 		case "event":
-			eventType.Write(value.Bytes())
+			d.eventType.Write(d.value.Bytes())
 		case "data":
-			dataBuffer.Write(value.Bytes())
-			dataBuffer.WriteByte(byteLF)
+			d.dataBuffer.Write(d.value.Bytes())
+			d.dataBuffer.WriteByte(byteLF)
 		case "id":
-			eventID.Reset()
-			eventID.Write(value.Bytes())
+			d.eventID.Reset()
+			d.eventID.Write(d.value.Bytes())
 		case "retry":
 			// TODO(alevinval): unused at the moment, will need refactor
 			// or change on the internal API, as decoder has no knowledge on the underlying connection.
@@ -143,17 +136,44 @@ func process(in *bufio.Reader, out chan Event) {
 	}
 }
 
-// Sanitises line feed ending.
-func sanitiseLineFeed(line []byte) []byte {
-	l := len(line)
-	// Trim LF
-	if l > 0 && line[l-1] == byteLF {
-		l--
-		// Trim CR
-		if l > 0 && line[l-1] == byteCR {
-			l--
+type lineFeedNormalizer struct {
+	r    io.Reader
+	last byte
+}
+
+func (lnf *lineFeedNormalizer) Read(p []byte) (int, error) {
+	n, err := lnf.r.Read(p)
+	for i := 0; i < n; i++ {
+		switch p[i] {
+		case byteLF:
+			if lnf.last == byteCR {
+				lnf.last = byteLF
+				copy(p[i:], p[i+1:])
+				n--
+				i--
+			}
+		case byteCR:
+			lnf.last = byteCR
+			p[i] = byteLF
+		default:
+			lnf.last = p[i]
 		}
-		line = line[:l]
 	}
-	return line
+	return n, err
+}
+
+func trimPrefixByte(b []byte, prefix byte) []byte {
+	if len(b) > 0 && b[0] == prefix {
+		return b[1:]
+	}
+	return b
+}
+
+// Trims a suffix without doing a bounds check.
+func unsafeTrimSuffixByte(b []byte, suffix byte) []byte {
+	l := len(b) - 1
+	if b[l] == suffix {
+		return b[:l]
+	}
+	return b
 }
