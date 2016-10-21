@@ -41,7 +41,7 @@ func NewEventSource(url string) (EventSource, error) {
 func (es *eventSource) initialise(url string) {
 	es.url = url
 	es.in = nil
-	es.out = nil
+	es.out = make(chan Event)
 	es.lastEventID = ""
 	es.readyState = StatusConnecting
 }
@@ -50,7 +50,7 @@ func (es *eventSource) initialise(url string) {
 func (es *eventSource) connect() (err error) {
 	response, err := httpConnectToSSE(es.url)
 	if err != nil {
-		es.readyState = StatusClosed
+		es.Close()
 		return err
 	}
 	es.in = response.Body
@@ -62,13 +62,11 @@ func (es *eventSource) connect() (err error) {
 // Method consume() must be called once connect() succeeds.
 // It parses the input reader and assigns the event output channel accordingly.
 func (es *eventSource) consume() {
-	es.out = make(chan Event)
-	defer close(es.out)
-
 	d := NewDecoder(es.in)
 	for {
 		ev, err := d.Decode()
 		if err != nil {
+			es.Close()
 			return
 		}
 		es.lastEventID = ev.ID()
@@ -100,6 +98,12 @@ func (es *eventSource) Events() <-chan Event {
 // Closes the event source.
 // After closing the event source, it cannot be reused again.
 func (es *eventSource) Close() {
-	es.in.Close()
+	if es.readyState == StatusClosed {
+		return
+	}
 	es.readyState = StatusClosed
+	if es.in != nil {
+		es.in.Close()
+	}
+	close(es.out)
 }

@@ -12,20 +12,20 @@ const (
 type (
 	// ErrHTTPNotOk is returned when a request returns a status code different than 200 OK.
 	ErrHTTPNotOk struct {
-		statusCode int
+		StatusCode int
 	}
 	// ErrHTTPContentType is returned when a server does not accept the text/event-stream content type.
 	ErrHTTPContentType struct {
-		contentType string
+		ContentType string
 	}
 )
 
 func (e ErrHTTPNotOk) Error() string {
-	return fmt.Sprintf("request status code was %d instead of %d", e.statusCode, http.StatusOK)
+	return fmt.Sprintf("request status code was %d instead of %d", e.StatusCode, http.StatusOK)
 }
 
 func (e ErrHTTPContentType) Error() string {
-	return fmt.Sprintf("content type is %q instead of %q", e.contentType, contentTypeEventStream)
+	return fmt.Sprintf("content type is %q instead of %q", e.ContentType, contentTypeEventStream)
 }
 
 // Attempts to open an HTTP connection, validates that the server supports
