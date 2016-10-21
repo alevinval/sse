@@ -80,8 +80,7 @@ func (d *decoder) Decode() (Event, error) {
 			id = value
 			eventSeen = true
 		case "retry":
-			// TODO(alevinval): unused at the moment, will need refactor
-			// or change on the internal API, as decoder has no knowledge on the underlying connection.
+			// To be implemented. Decoder has no knowledge of the underlying connection at the moment.
 		default:
 			// Ignore field
 		}

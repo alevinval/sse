@@ -33,10 +33,9 @@ type (
 
 // NewEventSource constructs returns an EventSource that satisfies the HTML5 EventSource specification.
 func NewEventSource(url string) (EventSource, error) {
-	es := &eventSource{}
+	es := new(eventSource)
 	es.initialise(url)
-	err := es.connect()
-	return es, err
+	return es, es.connect()
 }
 
 func (es *eventSource) initialise(url string) {
@@ -55,7 +54,7 @@ func (es *eventSource) connect() (err error) {
 		return err
 	}
 	es.in = response.Body
-	es.consume()
+	go es.consume()
 	es.readyState = StatusOpen
 	return nil
 }
@@ -64,18 +63,17 @@ func (es *eventSource) connect() (err error) {
 // It parses the input reader and assigns the event output channel accordingly.
 func (es *eventSource) consume() {
 	es.out = make(chan Event)
-	go func() {
-		var decoder = NewDecoder(es.in)
-		for {
-			ev, err := decoder.Decode()
-			if err != nil {
-				close(es.out)
-				return
-			}
-			es.lastEventID = ev.ID()
-			es.out <- ev
+	defer close(es.out)
+
+	d := NewDecoder(es.in)
+	for {
+		ev, err := d.Decode()
+		if err != nil {
+			return
 		}
-	}()
+		es.lastEventID = ev.ID()
+		es.out <- ev
+	}
 }
 
 // Returns the event source URL.
