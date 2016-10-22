@@ -20,6 +20,9 @@ func TestInitialiseEventCopiesDataBuffer(t *testing.T) {
 	data := []byte("test event data")
 	event := newEvent("test_id", "test_name", data)
 
+	// Equal doesn't check pointers but values
+	assert.Equal(t, data, event.Data())
+
 	// Pointers should differ, because NewEvent() allocates a new buffer
 	// and copies data over.
 	p1 := reflect.ValueOf(data).Pointer()
