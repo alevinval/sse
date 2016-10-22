@@ -40,7 +40,9 @@ type (
 		Close()
 	}
 	eventSource struct {
-		lastEventID  string
+		lastEventID    string
+		lastEventIDMux sync.RWMutex
+
 		url          string
 		resp         *http.Response
 		out          chan Event
@@ -50,7 +52,8 @@ type (
 		retry time.Duration
 
 		// Status of the event stream.
-		readyState byte
+		readyState    byte
+		readyStateMux sync.RWMutex
 	}
 )
 
@@ -69,7 +72,7 @@ func NewEventSource(url string) (EventSource, error) {
 // connect does a connection attempt, if the operation fails, attempt reconnecting
 // according to the spec.
 func (es *eventSource) connect() (err error) {
-	es.readyState = StatusConnecting
+	es.setReadyState(StatusConnecting)
 
 	// Attempt first connection.
 	err = es.connectOnce()
@@ -99,7 +102,7 @@ func (es *eventSource) connectOnce() error {
 		return ErrContentType
 	}
 	es.resp = resp
-	es.readyState = StatusOpen
+	es.setReadyState(StatusOpen)
 	go es.consume()
 	return err
 }
@@ -123,7 +126,7 @@ func (es *eventSource) consume() {
 			es.Close()
 			return
 		}
-		es.lastEventID = ev.ID()
+		es.setLastEventID(ev.ID())
 		es.out <- ev
 	}
 }
@@ -150,12 +153,28 @@ func (es *eventSource) URL() string {
 
 // Returns the event source connection state, either connecting, open or closed.
 func (es *eventSource) ReadyState() byte {
+	es.readyStateMux.RLock()
+	defer es.readyStateMux.RUnlock()
 	return es.readyState
+}
+
+func (es *eventSource) setReadyState(newState byte) {
+	es.readyStateMux.Lock()
+	defer es.readyStateMux.Unlock()
+	es.readyState = newState
 }
 
 // Returns the last event source Event id.
 func (es *eventSource) LastEventID() string {
+	es.lastEventIDMux.RLock()
+	defer es.lastEventIDMux.RUnlock()
 	return es.lastEventID
+}
+
+func (es *eventSource) setLastEventID(id string) {
+	es.lastEventIDMux.Lock()
+	defer es.lastEventIDMux.Unlock()
+	es.lastEventID = id
 }
 
 // Returns the channel of events. Events will be queued in the channel as they
@@ -167,10 +186,10 @@ func (es *eventSource) Events() <-chan Event {
 // Closes the event source.
 // After closing the event source, it cannot be reused again.
 func (es *eventSource) Close() {
-	if es.readyState == StatusClosed {
+	if es.ReadyState() == StatusClosed {
 		return
 	}
-	es.readyState = StatusClosed
+	es.setReadyState(StatusClosed)
 	if es.resp != nil {
 		es.resp.Body.Close()
 	}
