@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -22,6 +23,11 @@ const (
 
 var (
 	ErrContentType = errors.New("eventsource: the content type of the stream is not allowed")
+
+	// Map used by decoders to be able to change the retry time of the eventSource when
+	// a retry event is received.
+	globalDecoderMap = map[Decoder]*eventSource{}
+	retryMux         = sync.RWMutex{}
 )
 
 type (
@@ -51,10 +57,10 @@ type (
 // NewEventSource constructs returns an EventSource that satisfies the HTML5 EventSource specification.
 func NewEventSource(url string) (EventSource, error) {
 	es := eventSource{
-		url: url,
-		out: make(chan Event),
+		url:          url,
+		out:          make(chan Event),
 		closeOutOnce: make(chan bool),
-		retry: defaultRetry,
+		retry:        defaultRetry,
 	}
 	go es.closeOnce()
 	return &es, es.connect()
@@ -102,6 +108,11 @@ func (es *eventSource) connectOnce() error {
 // It parses the input reader and assigns the event output channel accordingly.
 func (es *eventSource) consume() {
 	d := NewDecoder(es.resp.Body)
+
+	retryMux.Lock()
+	globalDecoderMap[d] = es
+	retryMux.Unlock()
+
 	for {
 		ev, err := d.Decode()
 		if err != nil {

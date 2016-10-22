@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"io"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type (
@@ -80,7 +82,7 @@ func (d *decoder) Decode() (Event, error) {
 			id = value
 			eventSeen = true
 		case "retry":
-			// To be implemented. Decoder has no knowledge of the underlying connection at the moment.
+			d.increaseRetry(value)
 		default:
 			// Ignore field
 		}
@@ -91,4 +93,17 @@ func (d *decoder) Decode() (Event, error) {
 	//  discarded. (If the file ends in the middle of an event, before the final
 	//  empty line, the incomplete event is not dispatched.)"
 	return nil, io.EOF
+}
+
+func (d *decoder) increaseRetry(value string) {
+	retry, err := strconv.Atoi(value)
+	if err != nil {
+		return
+	}
+	retryMux.RLock()
+	es, ok := globalDecoderMap[d]
+	retryMux.Unlock()
+	if ok {
+		es.retry = time.Duration(retry)
+	}
 }
