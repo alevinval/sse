@@ -36,8 +36,8 @@ type (
 	eventSource struct {
 		lastEventID  string
 		url          string
-		out          chan Event
 		resp         *http.Response
+		out          chan Event
 		closeOutOnce chan bool
 
 		// Reconnection waiting time in milliseconds
@@ -50,20 +50,14 @@ type (
 
 // NewEventSource constructs returns an EventSource that satisfies the HTML5 EventSource specification.
 func NewEventSource(url string) (EventSource, error) {
-	es := new(eventSource)
-	es.initialise(url)
-	return es, es.connect()
-}
-
-func (es *eventSource) initialise(url string) {
-	es.lastEventID = ""
-	es.url = url
-	es.out = make(chan Event)
-	es.resp = nil
-	es.closeOutOnce = make(chan bool, 1)
-	es.readyState = StatusConnecting
-	es.retry = defaultRetry
+	es := eventSource{
+		url: url,
+		out: make(chan Event),
+		closeOutOnce: make(chan bool),
+		retry: defaultRetry,
+	}
 	go es.closeOnce()
+	return &es, es.connect()
 }
 
 // connect does a connection attempt, if the operation fails, attempt reconnecting
