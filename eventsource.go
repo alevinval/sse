@@ -1,16 +1,27 @@
 package sse
 
 import (
+	"errors"
 	"io"
+	"net/http"
+	"time"
 )
 
 const (
+	AllowedContentType = "text/event-stream"
+
 	// StatusConnecting is the status of the EventSource before it tries to establish connection with the server.
 	StatusConnecting byte = iota
 	// StatusOpen after it connects to the server.
 	StatusOpen
 	// StatusClosed after the connection is closed.
 	StatusClosed
+
+	defaultRetry = time.Duration(1000)
+)
+
+var (
+	ErrContentType = errors.New("eventsource: the content type of the stream is not allowed")
 )
 
 type (
@@ -23,11 +34,17 @@ type (
 		Close()
 	}
 	eventSource struct {
-		lastEventID string
-		url         string
-		in          io.ReadCloser
-		out         chan Event
-		readyState  byte
+		lastEventID  string
+		url          string
+		out          chan Event
+		resp         *http.Response
+		closeOutOnce chan bool
+
+		// Reconnection waiting time in milliseconds
+		retry time.Duration
+
+		// Status of the event stream.
+		readyState byte
 	}
 )
 
@@ -39,39 +56,86 @@ func NewEventSource(url string) (EventSource, error) {
 }
 
 func (es *eventSource) initialise(url string) {
-	es.url = url
-	es.in = nil
-	es.out = make(chan Event)
 	es.lastEventID = ""
+	es.url = url
+	es.out = make(chan Event)
+	es.resp = nil
+	es.closeOutOnce = make(chan bool, 1)
 	es.readyState = StatusConnecting
+	es.retry = defaultRetry
+	go es.closeOnce()
+}
+
+// connect does a connection attempt, if the operation fails, attempt reconnecting
+// according to the spec.
+func (es *eventSource) connect() (err error) {
+	es.readyState = StatusConnecting
+
+	// Attempt first connection.
+	err = es.connectOnce()
+	if err == nil {
+		return
+	}
+
+	// If the first connect attempt fails, begin the reconnection process.
+	for es.mustReconnect(err) {
+		time.Sleep(es.retry)
+		err = es.connectOnce()
+	}
+	if err != nil {
+		es.Close()
+	}
+	return
 }
 
 // Attempts to connect and updates internal status depending on the outcome.
-func (es *eventSource) connect() (err error) {
-	response, err := httpConnectToSSE(es.url)
+func (es *eventSource) connectOnce() error {
+	resp, err := http.Get(es.url)
 	if err != nil {
-		es.Close()
+		es.resp = nil
 		return err
 	}
-	es.in = response.Body
-	go es.consume()
+	if resp.Header.Get("Content-Type") != AllowedContentType {
+		return ErrContentType
+	}
+	es.resp = resp
 	es.readyState = StatusOpen
-	return nil
+	go es.consume()
+	return err
 }
 
 // Method consume() must be called once connect() succeeds.
 // It parses the input reader and assigns the event output channel accordingly.
 func (es *eventSource) consume() {
-	d := NewDecoder(es.in)
+	d := NewDecoder(es.resp.Body)
 	for {
 		ev, err := d.Decode()
 		if err != nil {
+			if es.mustReconnect(err) {
+				err = es.connect()
+				return
+			}
 			es.Close()
 			return
 		}
 		es.lastEventID = ev.ID()
 		es.out <- ev
 	}
+}
+
+// Clients will reconnect if the connection is closed;
+// a client can be told to stop reconnecting using the HTTP 204 No Content response code.
+func (es *eventSource) mustReconnect(err error) bool {
+	switch err {
+	case ErrContentType:
+		return false
+	case io.ErrUnexpectedEOF:
+		return true
+	}
+	if es.resp != nil && es.resp.StatusCode == http.StatusNoContent {
+		return false
+	}
+	return true
 }
 
 // Returns the event source URL.
@@ -102,8 +166,22 @@ func (es *eventSource) Close() {
 		return
 	}
 	es.readyState = StatusClosed
-	if es.in != nil {
-		es.in.Close()
+	if es.resp != nil {
+		es.resp.Body.Close()
 	}
-	close(es.out)
+	es.sendClose()
+}
+
+func (es *eventSource) sendClose() {
+	select {
+	case es.closeOutOnce <- true:
+	default:
+	}
+}
+
+func (es *eventSource) closeOnce() {
+	select {
+	case <-es.closeOutOnce:
+		close(es.out)
+	}
 }
