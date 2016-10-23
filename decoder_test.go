@@ -166,6 +166,12 @@ func TestNewLineWithCR(t *testing.T) {
 	}
 }
 
+func TestDecodeRetry(t *testing.T) {
+	decoder := newDecoder("retry: 100\nretry: a\n")
+	_, err := decoder.Decode()
+	assert.Equal(t, io.EOF, err)
+}
+
 // Bug #4: decoder: pure CR not recognized as end of line #4
 func TestPureLineFeedsWithCarriageReturn(t *testing.T) {
 	decoder := newDecoder("event: name\rdata: some\rdata:  data\r\r")

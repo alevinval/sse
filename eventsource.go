@@ -40,20 +40,21 @@ type (
 		Close()
 	}
 	eventSource struct {
-		lastEventID    string
-		lastEventIDMux sync.RWMutex
-
 		url          string
 		resp         *http.Response
 		out          chan Event
 		closeOutOnce chan bool
 
-		// Reconnection waiting time in milliseconds
-		retry time.Duration
+		// Last recorded event ID
+		lastEventID    string
+		lastEventIDMux sync.RWMutex
 
 		// Status of the event stream.
 		readyState    byte
 		readyStateMux sync.RWMutex
+
+		// Reconnection waiting time in milliseconds
+		retry time.Duration
 	}
 )
 
@@ -65,7 +66,10 @@ func NewEventSource(url string) (EventSource, error) {
 		closeOutOnce: make(chan bool),
 		retry:        defaultRetry,
 	}
+
+	// Ensure the output channel is closed only once.
 	go es.closeOnce()
+
 	return &es, es.connect()
 }
 
@@ -73,16 +77,19 @@ func NewEventSource(url string) (EventSource, error) {
 // according to the spec.
 func (es *eventSource) connect() (err error) {
 	es.setReadyState(StatusConnecting)
-
-	// Attempt first connection.
 	err = es.connectOnce()
-	if err == nil {
-		return
+	if err != nil {
+		err = es.reconnect()
 	}
+	return
+}
 
-	// If the first connect attempt fails, begin the reconnection process.
+// reconnect to the stream several until the operation succeeds or the conditions
+// to retry no longer hold true.
+func (es *eventSource) reconnect() (err error) {
+	es.setReadyState(StatusConnecting)
 	for es.mustReconnect(err) {
-		time.Sleep(es.retry)
+		time.Sleep(es.retry * time.Millisecond)
 		err = es.connectOnce()
 	}
 	if err != nil {
@@ -120,7 +127,7 @@ func (es *eventSource) consume() {
 		ev, err := d.Decode()
 		if err != nil {
 			if es.mustReconnect(err) {
-				err = es.connect()
+				err = es.reconnect()
 				return
 			}
 			es.Close()

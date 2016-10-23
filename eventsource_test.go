@@ -12,18 +12,29 @@ import (
 )
 
 const (
-	ContentTypeTextStream = "text/event-stream"
-	ContentTypeDefault    = "text/plain; charset=utf-8"
+	eventStream = "text/event-stream"
+	textPlain   = "text/plain; charset=utf-8"
 )
 
-type SSE struct {
+type server struct {
 	ContentType string
-	EventBytes  []byte
+	Events      chan []byte
 	Hang        bool
 	Reconnects  int
+	closer      chan bool
 }
 
-func (s *SSE) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+func newServer() (*httptest.Server, *server) {
+	config := &server{
+		ContentType: eventStream,
+		Reconnects:  1,
+		Events:      make(chan []byte),
+		closer:      make(chan bool),
+	}
+	return httptest.NewServer(config), config
+}
+
+func (s *server) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	rw.Header().Set("Connection", "keep-alive")
 	rw.Header().Set("Content-Type", s.ContentType)
 	if s.Reconnects <= 0 {
@@ -31,31 +42,54 @@ func (s *SSE) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	s.Reconnects--
-	rw.Write(s.EventBytes)
 	f, _ := rw.(http.Flusher)
 	f.Flush()
-	if s.Hang {
-		time.Sleep(10 * time.Second)
+
+	for {
+		select {
+		case event, ok := <-s.Events:
+			if !ok {
+				return
+			}
+			rw.Write(event)
+			f.Flush()
+		case <-s.closer:
+			return
+		}
 	}
-	return
 }
 
-func CreateMockHTTPServer(contentType string, event []byte, reconnects int, hang bool) *httptest.Server {
-	s := SSE{ContentType: contentType, EventBytes: event, Reconnects: reconnects, Hang: hang}
-	return httptest.NewServer(&s)
+func (s *server) SendAndClose(data []byte) {
+	s.Send(data)
+	s.Close()
 }
 
-func assertEsCloses(t *testing.T, es sse.EventSource) bool {
+func (s *server) Send(data []byte) {
+	s.Events <- data
+}
+
+func (s *server) Close() {
+	s.closer <- true
+}
+
+func assertCloses(t *testing.T, es sse.EventSource) bool {
 	es.Close()
+	maxWaits := 10
+	var waits int
+	for es.ReadyState() != sse.StatusClosed && waits < maxWaits {
+		time.Sleep(10 * time.Millisecond)
+		waits++
+	}
 	return assert.Equal(t, sse.StatusClosed, es.ReadyState())
 }
 
-func assertEsIsOpen(t *testing.T, es sse.EventSource, err error) bool {
+func assertIsOpen(t *testing.T, es sse.EventSource, err error) bool {
 	return assert.Nil(t, err) && assert.Equal(t, sse.StatusOpen, es.ReadyState())
 }
 
 func TestNewEventSourceWithInvalidContentType(t *testing.T) {
-	s := CreateMockHTTPServer(ContentTypeDefault, []byte{}, 1, false)
+	s, config := newServer()
+	config.ContentType = textPlain
 	es, err := sse.NewEventSource(s.URL)
 	if assert.Error(t, err) {
 		assert.Equal(t, sse.ErrContentType, err)
@@ -64,59 +98,117 @@ func TestNewEventSourceWithInvalidContentType(t *testing.T) {
 		_, ok := <-es.Events()
 		assert.False(t, ok)
 	}
-	assertEsCloses(t, es)
+	assertCloses(t, es)
 }
 
 func TestNewEventSourceWithRightContentType(t *testing.T) {
-	s := CreateMockHTTPServer(ContentTypeTextStream, []byte{}, 1, false)
+	s, config := newServer()
 	es, err := sse.NewEventSource(s.URL)
-	if assertEsIsOpen(t, es, err) {
-		_, ok := <-es.Events()
-		assert.False(t, ok)
+	if assertIsOpen(t, es, err) {
+		ev := tests.NewEventWithPadding(128)
+		go config.SendAndClose(ev)
+		recv, ok := <-es.Events()
+		if assert.True(t, ok) {
+			assert.Equal(t, tests.GetPaddedEventData(ev), recv.Data())
+		}
 	}
-	assertEsCloses(t, es)
+	assertCloses(t, es)
 }
 
 func TestNewEventSourceSendingEvent(t *testing.T) {
 	expectedEvent := tests.NewEventWithPadding(2 << 10)
-	s := CreateMockHTTPServer(ContentTypeTextStream, expectedEvent, 1, false)
+	s, config := newServer()
 	es, err := sse.NewEventSource(s.URL)
-	if assertEsIsOpen(t, es, err) {
+	if assertIsOpen(t, es, err) {
+		go config.SendAndClose(expectedEvent)
 		ev, ok := <-es.Events()
-		assert.True(t, ok)
-		assert.Equal(t, tests.GetPaddedEventData(expectedEvent), ev.Data())
+		if assert.True(t, ok) {
+			assert.Equal(t, tests.GetPaddedEventData(expectedEvent), ev.Data())
+		}
 	}
-	assertEsCloses(t, es)
-}
-
-func TestNewEventSourceServerDropsConnection(t *testing.T) {
-	s := CreateMockHTTPServer(ContentTypeTextStream, []byte{}, 1, true)
-	es, err := sse.NewEventSource(s.URL)
-	if assertEsIsOpen(t, es, err) {
-		s.CloseClientConnections()
-		_, ok := <-es.Events()
-		assert.False(t, ok)
-		assert.Equal(t, sse.StatusClosed, es.ReadyState())
-	}
+	assertCloses(t, es)
 }
 
 func TestEventSourceLastEventID(t *testing.T) {
-	data := append([]byte("id: 123\n"), tests.NewEventWithPadding(2<<8)...)
-	s := CreateMockHTTPServer(ContentTypeTextStream, data, 1, false)
+	ev := tests.NewEventWithPadding(2 << 8)
+	expectedData := tests.GetPaddedEventData(ev)
+	ev = append([]byte("id: 123\n"), ev...)
+
+	s, config := newServer()
 	es, err := sse.NewEventSource(s.URL)
-	if assertEsIsOpen(t, es, err) {
-		assert.Equal(t, "", es.LastEventID())
-		<-es.Events()
-		assert.Equal(t, "123", es.LastEventID())
+	if assertIsOpen(t, es, err) {
+		go config.SendAndClose(ev)
+		ev, ok := <-es.Events()
+		if assert.True(t, ok) {
+			assert.Equal(t, "123", es.LastEventID())
+			assert.Equal(t, expectedData, ev.Data())
+		}
+	}
+	assertCloses(t, es)
+}
+
+func TestEventSourceRetryIsRespected(t *testing.T) {
+	s, config := newServer()
+	config.Reconnects = 3
+	es, err := sse.NewEventSource(s.URL)
+	if assertIsOpen(t, es, err) {
+		// Big retry
+		config.Send([]byte("retry: 100\n"))
+		config.Close()
+		go config.Send(tests.NewEventWithPadding(128))
+		select {
+		case _, ok := <-es.Events():
+			assert.True(t, ok)
+		case <-timeout(150 * time.Millisecond):
+			assert.Fail(t, "event source did not reconnect within the allowed time.")
+		}
+
+		// Smaller retry
+		config.Send([]byte("retry: 1\n"))
+		config.Close()
+		go config.Send(tests.NewEventWithPadding(128))
+		select {
+		case _, ok := <-es.Events():
+			assert.True(t, ok)
+		case <-timeout(10 * time.Millisecond):
+			assert.Fail(t, "event source did not reconnect within the allowed time.")
+		}
 	}
 }
 
-func TestReconnectWithRetries(t *testing.T) {
-	data := append([]byte("id: 123\n"), tests.NewEventWithPadding(2<<8)...)
-	s := CreateMockHTTPServer(ContentTypeTextStream, data, 2, true)
+func TestDropConnectionCannotReconnect(t *testing.T) {
+	s, config := newServer()
 	es, err := sse.NewEventSource(s.URL)
-	assert.Nil(t, err)
-	s.CloseClientConnections()
-	_, ok := <-es.Events()
-	assert.True(t, ok)
+	if assertIsOpen(t, es, err) {
+		config.Close()
+		go config.Send(tests.NewEventWithPadding(128))
+		_, ok := <-es.Events()
+		if assert.False(t, ok) {
+			assert.Equal(t, sse.StatusClosed, es.ReadyState())
+		}
+	}
+}
+
+func TestDropConnectionCanReconnect(t *testing.T) {
+	s, config := newServer()
+	config.Reconnects = 2
+
+	es, err := sse.NewEventSource(s.URL)
+	if assertIsOpen(t, es, err) {
+		config.Close()
+		go config.Send(tests.NewEventWithPadding(128))
+		_, ok := <-es.Events()
+		if assert.True(t, ok) {
+			assert.Equal(t, sse.StatusOpen, es.ReadyState())
+		}
+	}
+}
+
+func timeout(d time.Duration) <-chan bool {
+	ch := make(chan bool)
+	go func() {
+		time.Sleep(d)
+		ch <- true
+	}()
+	return ch
 }

@@ -102,7 +102,7 @@ func (d *decoder) increaseRetry(value string) {
 	}
 	retryMux.RLock()
 	es, ok := globalDecoderMap[d]
-	retryMux.Unlock()
+	retryMux.RUnlock()
 	if ok {
 		es.retry = time.Duration(retry)
 	}
