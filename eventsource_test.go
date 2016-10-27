@@ -76,15 +76,15 @@ func assertCloses(t *testing.T, es sse.EventSource) bool {
 	es.Close()
 	maxWaits := 10
 	var waits int
-	for es.ReadyState() != sse.StatusClosed && waits < maxWaits {
+	for es.ReadyState() != sse.Closed && waits < maxWaits {
 		time.Sleep(10 * time.Millisecond)
 		waits++
 	}
-	return assert.Equal(t, sse.StatusClosed, es.ReadyState())
+	return assert.Equal(t, sse.Closed, es.ReadyState())
 }
 
 func assertIsOpen(t *testing.T, es sse.EventSource, err error) bool {
-	return assert.Nil(t, err) && assert.Equal(t, sse.StatusOpen, es.ReadyState())
+	return assert.Nil(t, err) && assert.Equal(t, sse.Open, es.ReadyState())
 }
 
 func TestNewEventSourceWithInvalidContentType(t *testing.T) {
@@ -94,7 +94,7 @@ func TestNewEventSourceWithInvalidContentType(t *testing.T) {
 	if assert.Error(t, err) {
 		assert.Equal(t, sse.ErrContentType, err)
 		assert.Equal(t, s.URL, es.URL())
-		assert.Equal(t, sse.StatusClosed, es.ReadyState())
+		assert.Equal(t, sse.Closed, es.ReadyState())
 		_, ok := <-es.Events()
 		assert.False(t, ok)
 	}
@@ -184,7 +184,7 @@ func TestDropConnectionCannotReconnect(t *testing.T) {
 		go config.Send(tests.NewEventWithPadding(128))
 		_, ok := <-es.Events()
 		if assert.False(t, ok) {
-			assert.Equal(t, sse.StatusClosed, es.ReadyState())
+			assert.Equal(t, sse.Closed, es.ReadyState())
 		}
 	}
 }
@@ -199,7 +199,7 @@ func TestDropConnectionCanReconnect(t *testing.T) {
 		go config.Send(tests.NewEventWithPadding(128))
 		_, ok := <-es.Events()
 		if assert.True(t, ok) {
-			assert.Equal(t, sse.StatusOpen, es.ReadyState())
+			assert.Equal(t, sse.Open, es.ReadyState())
 		}
 	}
 }
