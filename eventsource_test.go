@@ -76,7 +76,7 @@ func assertCloses(t *testing.T, es sse.EventSource) bool {
 	es.Close()
 	maxWaits := 10
 	var waits int
-	for es.ReadyState() != sse.Closed && waits < maxWaits {
+	for es.ReadyState() == sse.Closing && waits < maxWaits {
 		time.Sleep(10 * time.Millisecond)
 		waits++
 	}

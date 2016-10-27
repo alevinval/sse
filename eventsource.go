@@ -17,6 +17,8 @@ const (
 	Connecting ReadyState = iota
 	// Open after connection is established with the server.
 	Open
+	// Closing after Close is invoked.
+	Closing
 	// Closed after the connection is closed.
 	Closed
 
@@ -198,11 +200,12 @@ func (es *eventSource) Close() {
 	if es.ReadyState() == Closed {
 		return
 	}
-	es.setReadyState(Closed)
+	es.setReadyState(Closing)
 	if es.resp != nil {
 		es.resp.Body.Close()
 	}
 	es.sendClose()
+	es.setReadyState(Closed)
 }
 
 func (es *eventSource) sendClose() {
