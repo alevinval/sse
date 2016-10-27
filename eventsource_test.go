@@ -76,7 +76,7 @@ func assertCloses(t *testing.T, es sse.EventSource) bool {
 	es.Close()
 	maxWaits := 10
 	var waits int
-	for es.ReadyState() != sse.Closed && waits < maxWaits {
+	for es.ReadyState() == sse.Closing && waits < maxWaits {
 		time.Sleep(10 * time.Millisecond)
 		waits++
 	}
@@ -99,6 +99,20 @@ func TestNewEventSourceWithInvalidContentType(t *testing.T) {
 		assert.False(t, ok)
 	}
 	assertCloses(t, es)
+}
+
+func TestEventSourceStates(t *testing.T) {
+	for _, test := range []struct {
+		stateNumber   byte
+		expectedState sse.ReadyState
+	}{
+		{0, sse.Connecting},
+		{1, sse.Open},
+		{2, sse.Closing},
+		{3, sse.Closed},
+	} {
+		assert.Equal(t, test.expectedState, sse.ReadyState(test.stateNumber))
+	}
 }
 
 func TestNewEventSourceWithRightContentType(t *testing.T) {
