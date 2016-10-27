@@ -1,16 +1,33 @@
 package sse
 
 import (
+	"errors"
 	"io"
+	"net/http"
+	"sync"
+	"time"
 )
 
 const (
+	AllowedContentType = "text/event-stream"
+
 	// StatusConnecting is the status of the EventSource before it tries to establish connection with the server.
 	StatusConnecting byte = iota
 	// StatusOpen after it connects to the server.
 	StatusOpen
 	// StatusClosed after the connection is closed.
 	StatusClosed
+
+	defaultRetry = time.Duration(1000)
+)
+
+var (
+	ErrContentType = errors.New("eventsource: the content type of the stream is not allowed")
+
+	// Map used by decoders to be able to change the retry time of the eventSource when
+	// a retry event is received.
+	globalDecoderMap = map[Decoder]*eventSource{}
+	retryMux         = sync.RWMutex{}
 )
 
 type (
@@ -23,59 +40,117 @@ type (
 		Close()
 	}
 	eventSource struct {
-		lastEventID string
-		url         string
-		in          io.ReadCloser
-		out         chan Event
-		readyState  byte
+		url          string
+		resp         *http.Response
+		out          chan Event
+		closeOutOnce chan bool
+
+		// Last recorded event ID
+		lastEventID    string
+		lastEventIDMux sync.RWMutex
+
+		// Status of the event stream.
+		readyState    byte
+		readyStateMux sync.RWMutex
+
+		// Reconnection waiting time in milliseconds
+		retry time.Duration
 	}
 )
 
 // NewEventSource constructs returns an EventSource that satisfies the HTML5 EventSource specification.
 func NewEventSource(url string) (EventSource, error) {
-	es := &eventSource{}
-	es.initialise(url)
-	err := es.connect()
-	return es, err
+	es := eventSource{
+		url:          url,
+		out:          make(chan Event),
+		closeOutOnce: make(chan bool),
+		retry:        defaultRetry,
+	}
+
+	// Ensure the output channel is closed only once.
+	go es.closeOnce()
+
+	return &es, es.connect()
 }
 
-func (es *eventSource) initialise(url string) {
-	es.url = url
-	es.in = nil
-	es.out = nil
-	es.lastEventID = ""
-	es.readyState = StatusConnecting
+// connect does a connection attempt, if the operation fails, attempt reconnecting
+// according to the spec.
+func (es *eventSource) connect() (err error) {
+	es.setReadyState(StatusConnecting)
+	err = es.connectOnce()
+	if err != nil {
+		err = es.reconnect()
+	}
+	return
+}
+
+// reconnect to the stream several until the operation succeeds or the conditions
+// to retry no longer hold true.
+func (es *eventSource) reconnect() (err error) {
+	es.setReadyState(StatusConnecting)
+	for es.mustReconnect(err) {
+		time.Sleep(es.retry * time.Millisecond)
+		err = es.connectOnce()
+	}
+	if err != nil {
+		es.Close()
+	}
+	return
 }
 
 // Attempts to connect and updates internal status depending on the outcome.
-func (es *eventSource) connect() (err error) {
-	response, err := httpConnectToSSE(es.url)
+func (es *eventSource) connectOnce() error {
+	resp, err := http.Get(es.url)
 	if err != nil {
-		es.readyState = StatusClosed
+		es.resp = nil
 		return err
 	}
-	es.in = response.Body
-	es.consume()
-	es.readyState = StatusOpen
-	return nil
+	if resp.Header.Get("Content-Type") != AllowedContentType {
+		return ErrContentType
+	}
+	es.resp = resp
+	es.setReadyState(StatusOpen)
+	go es.consume()
+	return err
 }
 
 // Method consume() must be called once connect() succeeds.
 // It parses the input reader and assigns the event output channel accordingly.
 func (es *eventSource) consume() {
-	es.out = make(chan Event)
-	go func() {
-		var decoder = NewDecoder(es.in)
-		for {
-			ev, err := decoder.Decode()
-			if err != nil {
-				close(es.out)
+	d := NewDecoder(es.resp.Body)
+
+	retryMux.Lock()
+	globalDecoderMap[d] = es
+	retryMux.Unlock()
+
+	for {
+		ev, err := d.Decode()
+		if err != nil {
+			if es.mustReconnect(err) {
+				err = es.reconnect()
 				return
 			}
-			es.lastEventID = ev.ID()
-			es.out <- ev
+			es.Close()
+			return
 		}
-	}()
+		es.setLastEventID(ev.ID())
+		es.out <- ev
+	}
+}
+
+// Clients will reconnect if the connection is closed;
+// a client can be told to stop reconnecting using the HTTP 204 No Content response code.
+func (es *eventSource) mustReconnect(err error) bool {
+	switch err {
+	case ErrContentType:
+		return false
+	case io.ErrUnexpectedEOF:
+		return true
+	}
+	if es.resp != nil && es.resp.StatusCode == http.StatusNoContent {
+		return false
+	}
+	return true
 }
 
 // Returns the event source URL.
@@ -85,12 +160,28 @@ func (es *eventSource) URL() string {
 
 // Returns the event source connection state, either connecting, open or closed.
 func (es *eventSource) ReadyState() byte {
+	es.readyStateMux.RLock()
+	defer es.readyStateMux.RUnlock()
 	return es.readyState
+}
+
+func (es *eventSource) setReadyState(newState byte) {
+	es.readyStateMux.Lock()
+	defer es.readyStateMux.Unlock()
+	es.readyState = newState
 }
 
 // Returns the last event source Event id.
 func (es *eventSource) LastEventID() string {
+	es.lastEventIDMux.RLock()
+	defer es.lastEventIDMux.RUnlock()
 	return es.lastEventID
+}
+
+func (es *eventSource) setLastEventID(id string) {
+	es.lastEventIDMux.Lock()
+	defer es.lastEventIDMux.Unlock()
+	es.lastEventID = id
 }
 
 // Returns the channel of events. Events will be queued in the channel as they
@@ -102,6 +193,26 @@ func (es *eventSource) Events() <-chan Event {
 // Closes the event source.
 // After closing the event source, it cannot be reused again.
 func (es *eventSource) Close() {
-	es.in.Close()
-	es.readyState = StatusClosed
+	if es.ReadyState() == StatusClosed {
+		return
+	}
+	es.setReadyState(StatusClosed)
+	if es.resp != nil {
+		es.resp.Body.Close()
+	}
+	es.sendClose()
+}
+
+func (es *eventSource) sendClose() {
+	select {
+	case es.closeOutOnce <- true:
+	default:
+	}
+}
+
+func (es *eventSource) closeOnce() {
+	select {
+	case <-es.closeOutOnce:
+		close(es.out)
+	}
 }

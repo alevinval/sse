@@ -1,8 +1,9 @@
 package sse
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestScanLines(t *testing.T) {

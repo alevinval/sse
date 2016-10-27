@@ -22,7 +22,7 @@ compliance to the the [HTML5 standard](https://html.spec.whatwg.org/multipage/co
 
 - Decoder performance could drop due memory copy when the SSE stream
 to be consumed provides line feeds using CRLF (`\r\n`), the library
-performs best when LF (`n`) is used.
+performs best when LF (`\n`) is used.
 
 - This package intends to be spec compliant, however: it might not be
 there yet. If you find a bug, do not hesitate to report it.
