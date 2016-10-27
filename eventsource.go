@@ -200,7 +200,8 @@ func (es *eventSource) Events() <-chan Event {
 // Closes the event source.
 // After closing the event source, it cannot be reused again.
 func (es *eventSource) Close() {
-	if es.ReadyState() == Closed {
+	state := es.ReadyState()
+	if state == Closed || state == Closing {
 		return
 	}
 	es.setReadyState(Closing)
