@@ -8,15 +8,17 @@ import (
 	"time"
 )
 
+type ReadyState byte
+
 const (
 	AllowedContentType = "text/event-stream"
 
-	// StatusConnecting is the status of the EventSource before it tries to establish connection with the server.
-	StatusConnecting byte = iota
-	// StatusOpen after it connects to the server.
-	StatusOpen
-	// StatusClosed after the connection is closed.
-	StatusClosed
+	// Connecting while trying to establish connection with the stream.
+	Connecting ReadyState = iota
+	// Open after connection is established with the server.
+	Open
+	// Closed after the connection is closed.
+	Closed
 
 	defaultRetry = time.Duration(1000)
 )
@@ -34,7 +36,7 @@ type (
 	// EventSource connects and processes events from an SSE stream.
 	EventSource interface {
 		URL() (url string)
-		ReadyState() (state byte)
+		ReadyState() (state ReadyState)
 		LastEventID() (id string)
 		Events() (events <-chan Event)
 		Close()
@@ -50,7 +52,7 @@ type (
 		lastEventIDMux sync.RWMutex
 
 		// Status of the event stream.
-		readyState    byte
+		readyState    ReadyState
 		readyStateMux sync.RWMutex
 
 		// Reconnection waiting time in milliseconds
@@ -76,7 +78,7 @@ func NewEventSource(url string) (EventSource, error) {
 // connect does a connection attempt, if the operation fails, attempt reconnecting
 // according to the spec.
 func (es *eventSource) connect() (err error) {
-	es.setReadyState(StatusConnecting)
+	es.setReadyState(Connecting)
 	err = es.connectOnce()
 	if err != nil {
 		err = es.reconnect()
@@ -87,7 +89,7 @@ func (es *eventSource) connect() (err error) {
 // reconnect to the stream several until the operation succeeds or the conditions
 // to retry no longer hold true.
 func (es *eventSource) reconnect() (err error) {
-	es.setReadyState(StatusConnecting)
+	es.setReadyState(Connecting)
 	for es.mustReconnect(err) {
 		time.Sleep(es.retry * time.Millisecond)
 		err = es.connectOnce()
@@ -109,7 +111,7 @@ func (es *eventSource) connectOnce() error {
 		return ErrContentType
 	}
 	es.resp = resp
-	es.setReadyState(StatusOpen)
+	es.setReadyState(Open)
 	go es.consume()
 	return err
 }
@@ -159,13 +161,13 @@ func (es *eventSource) URL() string {
 }
 
 // Returns the event source connection state, either connecting, open or closed.
-func (es *eventSource) ReadyState() byte {
+func (es *eventSource) ReadyState() ReadyState {
 	es.readyStateMux.RLock()
 	defer es.readyStateMux.RUnlock()
 	return es.readyState
 }
 
-func (es *eventSource) setReadyState(newState byte) {
+func (es *eventSource) setReadyState(newState ReadyState) {
 	es.readyStateMux.Lock()
 	defer es.readyStateMux.Unlock()
 	es.readyState = newState
@@ -193,10 +195,10 @@ func (es *eventSource) Events() <-chan Event {
 // Closes the event source.
 // After closing the event source, it cannot be reused again.
 func (es *eventSource) Close() {
-	if es.ReadyState() == StatusClosed {
+	if es.ReadyState() == Closed {
 		return
 	}
-	es.setReadyState(StatusClosed)
+	es.setReadyState(Closed)
 	if es.resp != nil {
 		es.resp.Body.Close()
 	}
