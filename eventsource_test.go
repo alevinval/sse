@@ -101,6 +101,20 @@ func TestNewEventSourceWithInvalidContentType(t *testing.T) {
 	assertCloses(t, es)
 }
 
+func TestEventSourceStates(t *testing.T) {
+	for _, test := range []struct {
+		stateNumber   byte
+		expectedState sse.ReadyState
+	}{
+		{0, sse.Connecting},
+		{1, sse.Open},
+		{2, sse.Closing},
+		{3, sse.Closed},
+	} {
+		assert.Equal(t, test.expectedState, sse.ReadyState(test.stateNumber))
+	}
+}
+
 func TestNewEventSourceWithRightContentType(t *testing.T) {
 	s, config := newServer()
 	es, err := sse.NewEventSource(s.URL)
