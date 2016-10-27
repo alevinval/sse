@@ -137,7 +137,10 @@ func (es *eventSource) consume() {
 			es.Close()
 			return
 		}
-		es.setLastEventID(ev.ID())
+		id := ev.ID()
+		if id != "" {
+			es.setLastEventID(id)
+		}
 		es.out <- ev
 	}
 }

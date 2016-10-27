@@ -147,15 +147,22 @@ func TestEventSourceLastEventID(t *testing.T) {
 	ev := tests.NewEventWithPadding(2 << 8)
 	expectedData := tests.GetPaddedEventData(ev)
 	ev = append([]byte("id: 123\n"), ev...)
+	expectedID := "123"
 
 	s, config := newServer()
 	es, err := sse.NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
-		go config.SendAndClose(ev)
+		go config.Send(ev)
 		ev, ok := <-es.Events()
 		if assert.True(t, ok) {
-			assert.Equal(t, "123", es.LastEventID())
+			assert.Equal(t, expectedID, es.LastEventID())
 			assert.Equal(t, expectedData, ev.Data())
+		}
+
+		go config.Send(tests.NewEventWithPadding(32))
+		_, ok = <-es.Events()
+		if assert.True(t, ok) {
+			assert.Equal(t, expectedID, es.LastEventID())
 		}
 	}
 	assertCloses(t, es)
