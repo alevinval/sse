@@ -45,6 +45,7 @@ type (
 	}
 	eventSource struct {
 		url          string
+		d            Decoder
 		resp         *http.Response
 		out          chan Event
 		closeOutOnce chan bool
@@ -65,6 +66,7 @@ type (
 // NewEventSource constructs returns an EventSource that satisfies the HTML5 EventSource specification.
 func NewEventSource(url string) (EventSource, error) {
 	es := eventSource{
+		d:            nil,
 		url:          url,
 		out:          make(chan Event),
 		closeOutOnce: make(chan bool),
@@ -103,38 +105,44 @@ func (es *eventSource) reconnect() (err error) {
 }
 
 // Attempts to connect and updates internal status depending on the outcome.
-func (es *eventSource) connectOnce() error {
+func (es *eventSource) connectOnce() (err error) {
+	es.resp, err = es.httpConnect()
+	if err != nil {
+		return
+	}
+	delEventSource(es.d)
+	es.d = NewDecoder(es.resp.Body)
+	setEventSource(es.d, es)
+	es.setReadyState(Open)
+	go es.consume()
+	return
+}
+
+func (es *eventSource) httpConnect() (*http.Response, error) {
+	// Prepare request
 	req, err := http.NewRequest("GET", es.url, nil)
 	if err != nil {
-		es.resp = nil
-		return err
+		return nil, err
 	}
 	req.Header.Set("Accept", AllowedContentType)
+
+	// Check response
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		es.resp = nil
-		return err
+		return nil, err
 	}
 	if resp.Header.Get("Content-Type") != AllowedContentType {
-		return ErrContentType
+		return nil, ErrContentType
 	}
-	es.resp = resp
-	es.setReadyState(Open)
-	go es.consume()
-	return err
+	return resp, nil
 }
 
 // Method consume() must be called once connect() succeeds.
 // It parses the input reader and assigns the event output channel accordingly.
 func (es *eventSource) consume() {
-	d := NewDecoder(es.resp.Body)
-
-	retryMux.Lock()
-	globalDecoderMap[d] = es
-	retryMux.Unlock()
-
 	for {
-		ev, err := d.Decode()
+		ev, err := es.d.Decode()
 		if err != nil {
 			if es.mustReconnect(err) {
 				err = es.reconnect()
@@ -215,6 +223,7 @@ func (es *eventSource) Close() {
 		es.resp.Body.Close()
 	}
 	es.sendClose()
+	delEventSource(es.d)
 	es.setReadyState(Closed)
 }
 
@@ -230,4 +239,23 @@ func (es *eventSource) closeOnce() {
 	case <-es.closeOutOnce:
 		close(es.out)
 	}
+}
+
+func setEventSource(d Decoder, es *eventSource) {
+	retryMux.Lock()
+	defer retryMux.Unlock()
+	globalDecoderMap[d] = es
+}
+
+func getEventSource(d Decoder) (es *eventSource, ok bool) {
+	retryMux.RLock()
+	defer retryMux.RUnlock()
+	es, ok = globalDecoderMap[d]
+	return
+}
+
+func delEventSource(d Decoder) {
+	retryMux.Lock()
+	defer retryMux.Unlock()
+	delete(globalDecoderMap, d)
 }
