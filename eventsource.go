@@ -104,7 +104,13 @@ func (es *eventSource) reconnect() (err error) {
 
 // Attempts to connect and updates internal status depending on the outcome.
 func (es *eventSource) connectOnce() error {
-	resp, err := http.Get(es.url)
+	req, err := http.NewRequest("GET", es.url, nil)
+	if err != nil {
+		es.resp = nil
+		return err
+	}
+	req.Header.Set("Accept", AllowedContentType)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		es.resp = nil
 		return err
