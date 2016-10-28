@@ -125,6 +125,7 @@ func (es *eventSource) httpConnect() (*http.Response, error) {
 		return nil, err
 	}
 	req.Header.Set("Accept", AllowedContentType)
+	req.Header.Set("Cache-Control", "no-store")
 
 	// Check response
 	resp, err := http.DefaultClient.Do(req)
