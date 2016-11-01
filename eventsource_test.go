@@ -21,7 +21,7 @@ type server struct {
 	Events      chan []byte
 	Hang        bool
 	Reconnects  int
-	closer      chan bool
+	closer      chan struct{}
 }
 
 func newServer() (*httptest.Server, *server) {
@@ -29,7 +29,7 @@ func newServer() (*httptest.Server, *server) {
 		ContentType: eventStream,
 		Reconnects:  1,
 		Events:      make(chan []byte),
-		closer:      make(chan bool),
+		closer:      make(chan struct{}),
 	}
 	return httptest.NewServer(config), config
 }
@@ -69,7 +69,7 @@ func (s *server) Send(data []byte) {
 }
 
 func (s *server) Close() {
-	s.closer <- true
+	s.closer <- struct{}{}
 }
 
 func assertCloses(t *testing.T, es sse.EventSource) bool {
@@ -225,11 +225,11 @@ func TestDropConnectionCanReconnect(t *testing.T) {
 	}
 }
 
-func timeout(d time.Duration) <-chan bool {
-	ch := make(chan bool)
+func timeout(d time.Duration) <-chan struct{} {
+	ch := make(chan struct{})
 	go func() {
 		time.Sleep(d)
-		ch <- true
+		ch <- struct{}{}
 	}()
 	return ch
 }
