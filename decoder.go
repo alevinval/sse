@@ -6,13 +6,12 @@ import (
 	"io"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type (
 	// Decoder interface decodes events from a reader input
 	Decoder interface {
-		Decode() (Event, error)
+		Decode() (RawEvent, error)
 	}
 	decoder struct {
 		scanner *bufio.Scanner
@@ -21,7 +20,7 @@ type (
 )
 
 // Decode reads the input stream and interprets the events in it. Any error while reading is  returned.
-func (d *decoder) Decode() (Event, error) {
+func (d *decoder) Decode() (RawEvent, error) {
 	// Stores event data, which is filled after one or many lines from the reader
 	var id, name string
 	var eventSeen bool
@@ -82,7 +81,10 @@ func (d *decoder) Decode() (Event, error) {
 			id = value
 			eventSeen = true
 		case "retry":
-			d.increaseRetry(value)
+			retry, err := strconv.Atoi(value)
+			if err == nil && retry >= 0 {
+				return newRetryEvent(retry), nil
+			}
 		default:
 			// Ignore field
 		}
@@ -93,15 +95,4 @@ func (d *decoder) Decode() (Event, error) {
 	//  discarded. (If the file ends in the middle of an event, before the final
 	//  empty line, the incomplete event is not dispatched.)"
 	return nil, io.EOF
-}
-
-func (d *decoder) increaseRetry(value string) {
-	retry, err := strconv.Atoi(value)
-	if err != nil {
-		return
-	}
-	es, ok := getEventSource(d)
-	if ok {
-		es.retry = time.Duration(retry)
-	}
 }
