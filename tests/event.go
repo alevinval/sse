@@ -12,7 +12,7 @@ func NewEventWithPadding(size int) []byte {
 }
 
 // GetPaddedEventData returns the event data as it would be returned from
-// calling Data() on the dispatched event.
-func GetPaddedEventData(b []byte) []byte {
-	return b[6 : len(b)-2]
+// .Data on the dispatched event.
+func GetPaddedEventData(b []byte) string {
+	return string(b[6 : len(b)-2])
 }
