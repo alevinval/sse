@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/mubit/sse"
 	"github.com/mubit/sse/tests"
@@ -168,8 +169,12 @@ func TestNewLineWithCR(t *testing.T) {
 
 func TestDecodeRetry(t *testing.T) {
 	decoder := newDecoder("retry: 100\nretry: a\n")
-	_, err := decoder.Decode()
-	assert.Equal(t, io.EOF, err)
+	ev, err := decoder.Decode()
+	if assert.NoError(t, err) {
+		assert.Equal(t, time.Duration(100), ev.Retry())
+		_, err = decoder.Decode()
+		assert.Equal(t, io.EOF, err)
+	}
 }
 
 // Bug #4: decoder: pure CR not recognized as end of line #4
