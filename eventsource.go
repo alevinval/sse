@@ -27,11 +27,6 @@ const (
 
 var (
 	ErrContentType = errors.New("eventsource: the content type of the stream is not allowed")
-
-	// Map used by decoders to be able to change the retry time of the eventSource when
-	// a retry event is received.
-	globalDecoderMap = map[Decoder]*eventSource{}
-	retryMux         = sync.RWMutex{}
 )
 
 type (
@@ -40,14 +35,14 @@ type (
 		URL() (url string)
 		ReadyState() (state ReadyState)
 		LastEventID() (id string)
-		Events() (events <-chan Event)
+		Events() (events <-chan *Event)
 		Close()
 	}
 	eventSource struct {
 		url          string
 		d            Decoder
 		resp         *http.Response
-		out          chan Event
+		out          chan *Event
 		closeOutOnce chan bool
 
 		// Last recorded event ID
@@ -68,7 +63,7 @@ func NewEventSource(url string) (EventSource, error) {
 	es := eventSource{
 		d:            nil,
 		url:          url,
-		out:          make(chan Event),
+		out:          make(chan *Event),
 		closeOutOnce: make(chan bool),
 		retry:        defaultRetry,
 	}
@@ -110,9 +105,7 @@ func (es *eventSource) connectOnce() (err error) {
 	if err != nil {
 		return
 	}
-	delEventSource(es.d)
 	es.d = NewDecoder(es.resp.Body)
-	setEventSource(es.d, es)
 	es.setReadyState(Open)
 	go es.consume()
 	return
@@ -152,9 +145,12 @@ func (es *eventSource) consume() {
 			es.Close()
 			return
 		}
-		id := ev.ID()
-		if id != "" {
-			es.setLastEventID(id)
+		if ev.Retry >= 0 {
+			es.retry = time.Duration(ev.Retry)
+			continue
+		}
+		if ev.ID() != "" {
+			es.setLastEventID(ev.ID())
 		}
 		es.out <- ev
 	}
@@ -208,7 +204,7 @@ func (es *eventSource) setLastEventID(id string) {
 
 // Returns the channel of events. Events will be queued in the channel as they
 // are received.
-func (es *eventSource) Events() <-chan Event {
+func (es *eventSource) Events() <-chan *Event {
 	return es.out
 }
 
@@ -224,7 +220,6 @@ func (es *eventSource) Close() {
 		es.resp.Body.Close()
 	}
 	es.sendClose()
-	delEventSource(es.d)
 	es.setReadyState(Closed)
 }
 
@@ -240,23 +235,4 @@ func (es *eventSource) closeOnce() {
 	case <-es.closeOutOnce:
 		close(es.out)
 	}
-}
-
-func setEventSource(d Decoder, es *eventSource) {
-	retryMux.Lock()
-	defer retryMux.Unlock()
-	globalDecoderMap[d] = es
-}
-
-func getEventSource(d Decoder) (es *eventSource, ok bool) {
-	retryMux.RLock()
-	defer retryMux.RUnlock()
-	es, ok = globalDecoderMap[d]
-	return
-}
-
-func delEventSource(d Decoder) {
-	retryMux.Lock()
-	defer retryMux.Unlock()
-	delete(globalDecoderMap, d)
 }
