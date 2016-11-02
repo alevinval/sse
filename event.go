@@ -28,7 +28,7 @@ func newEvent(id, name string, data []byte) *event {
 }
 
 func newRetryEvent(retry int) *event {
-	return &event{retry: time.Duration(retry)}
+	return &event{retry: time.Duration(retry) * time.Millisecond}
 }
 
 // Initialises a new event struct.

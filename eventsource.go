@@ -22,7 +22,7 @@ const (
 	// Closed after the connection is closed.
 	Closed
 
-	defaultRetry = time.Duration(1000)
+	defaultRetry = 1 * time.Second
 )
 
 var (
@@ -53,7 +53,7 @@ type (
 		readyState    ReadyState
 		readyStateMux sync.RWMutex
 
-		// Reconnection waiting time in milliseconds
+		// Reconnection waiting time
 		retry time.Duration
 	}
 )
@@ -90,7 +90,7 @@ func (es *eventSource) connect() (err error) {
 func (es *eventSource) reconnect() (err error) {
 	es.setReadyState(Connecting)
 	for es.mustReconnect(err) {
-		time.Sleep(es.retry * time.Millisecond)
+		time.Sleep(es.retry)
 		err = es.connectOnce()
 	}
 	if err != nil {

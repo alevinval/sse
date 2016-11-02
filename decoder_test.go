@@ -171,7 +171,7 @@ func TestDecodeRetry(t *testing.T) {
 	decoder := newDecoder("retry: 100\nretry: a\n")
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, time.Duration(100), ev.Retry())
+		assert.Equal(t, 100*time.Millisecond, ev.Retry())
 		_, err = decoder.Decode()
 		assert.Equal(t, io.EOF, err)
 	}
