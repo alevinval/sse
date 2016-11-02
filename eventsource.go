@@ -101,7 +101,7 @@ func (es *eventSource) reconnect() (err error) {
 
 // Attempts to connect and updates internal status depending on the outcome.
 func (es *eventSource) connectOnce() (err error) {
-	es.resp, err = es.httpConnect()
+	es.resp, err = es.doHttpConnect()
 	if err != nil {
 		return
 	}
@@ -111,7 +111,7 @@ func (es *eventSource) connectOnce() (err error) {
 	return
 }
 
-func (es *eventSource) httpConnect() (*http.Response, error) {
+func (es *eventSource) doHttpConnect() (*http.Response, error) {
 	// Prepare request
 	req, err := http.NewRequest("GET", es.url, nil)
 	if err != nil {
@@ -123,11 +123,10 @@ func (es *eventSource) httpConnect() (*http.Response, error) {
 	// Check response
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		es.resp = nil
-		return nil, err
+		return resp, err
 	}
 	if resp.Header.Get("Content-Type") != AllowedContentType {
-		return nil, ErrContentType
+		return resp, ErrContentType
 	}
 	return resp, nil
 }
