@@ -43,7 +43,7 @@ type (
 		d            Decoder
 		resp         *http.Response
 		out          chan Event
-		closeOutOnce chan bool
+		closeOutOnce chan struct{}
 
 		// Last recorded event ID
 		lastEventID    string
@@ -64,7 +64,7 @@ func NewEventSource(url string) (EventSource, error) {
 		d:            nil,
 		url:          url,
 		out:          make(chan Event),
-		closeOutOnce: make(chan bool),
+		closeOutOnce: make(chan struct{}),
 		retry:        defaultRetry,
 	}
 
@@ -225,7 +225,7 @@ func (es *eventSource) Close() {
 
 func (es *eventSource) sendClose() {
 	select {
-	case es.closeOutOnce <- true:
+	case es.closeOutOnce <- struct{}{}:
 	default:
 	}
 }
