@@ -123,7 +123,7 @@ func TestNewEventSourceWithRightContentType(t *testing.T) {
 		go config.SendAndClose(ev)
 		recv, ok := <-es.Events()
 		if assert.True(t, ok) {
-			assert.Equal(t, tests.GetPaddedEventData(ev), recv.Data())
+			assert.Equal(t, tests.GetPaddedEventData(ev), recv.Data)
 		}
 	}
 	assertCloses(t, es)
@@ -137,7 +137,7 @@ func TestNewEventSourceSendingEvent(t *testing.T) {
 		go config.SendAndClose(expectedEvent)
 		ev, ok := <-es.Events()
 		if assert.True(t, ok) {
-			assert.Equal(t, tests.GetPaddedEventData(expectedEvent), ev.Data())
+			assert.Equal(t, tests.GetPaddedEventData(expectedEvent), ev.Data)
 		}
 	}
 	assertCloses(t, es)
@@ -156,7 +156,7 @@ func TestEventSourceLastEventID(t *testing.T) {
 		ev, ok := <-es.Events()
 		if assert.True(t, ok) {
 			assert.Equal(t, expectedID, es.LastEventID())
-			assert.Equal(t, expectedData, ev.Data())
+			assert.Equal(t, expectedData, ev.Data)
 		}
 
 		go config.Send(tests.NewEventWithPadding(32))

@@ -22,7 +22,7 @@ const (
 	// Closed after the connection is closed.
 	Closed
 
-	defaultRetry = time.Duration(1000)
+	defaultRetry = 1 * time.Second
 )
 
 var (
@@ -35,14 +35,14 @@ type (
 		URL() (url string)
 		ReadyState() (state ReadyState)
 		LastEventID() (id string)
-		Events() (events <-chan Event)
+		Events() (events <-chan *Event)
 		Close()
 	}
 	eventSource struct {
 		url          string
 		d            Decoder
 		resp         *http.Response
-		out          chan Event
+		out          chan *Event
 		closeOutOnce chan struct{}
 
 		// Last recorded event ID
@@ -53,7 +53,7 @@ type (
 		readyState    ReadyState
 		readyStateMux sync.RWMutex
 
-		// Reconnection waiting time in milliseconds
+		// Reconnection waiting time
 		retry time.Duration
 	}
 )
@@ -63,7 +63,7 @@ func NewEventSource(url string) (EventSource, error) {
 	es := eventSource{
 		d:            nil,
 		url:          url,
-		out:          make(chan Event),
+		out:          make(chan *Event),
 		closeOutOnce: make(chan struct{}),
 		retry:        defaultRetry,
 	}
@@ -90,7 +90,7 @@ func (es *eventSource) connect() (err error) {
 func (es *eventSource) reconnect() (err error) {
 	es.setReadyState(Connecting)
 	for es.mustReconnect(err) {
-		time.Sleep(es.retry * time.Millisecond)
+		time.Sleep(es.retry)
 		err = es.connectOnce()
 	}
 	if err != nil {
@@ -145,12 +145,12 @@ func (es *eventSource) consume() {
 			es.Close()
 			return
 		}
-		if ev.Retry() >= 0 {
-			es.retry = ev.Retry()
+		if ev.retry >= 0 {
+			es.retry = time.Duration(ev.retry) * time.Millisecond
 			continue
 		}
-		if ev.ID() != "" {
-			es.setLastEventID(ev.ID())
+		if ev.ID != "" {
+			es.setLastEventID(ev.ID)
 		}
 		es.out <- ev
 	}
@@ -204,7 +204,7 @@ func (es *eventSource) setLastEventID(id string) {
 
 // Returns the channel of events. Events will be queued in the channel as they
 // are received.
-func (es *eventSource) Events() <-chan Event {
+func (es *eventSource) Events() <-chan *Event {
 	return es.out
 }
 

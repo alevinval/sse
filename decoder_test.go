@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"testing"
-	"time"
 
 	"github.com/mubit/sse"
 	"github.com/mubit/sse/tests"
@@ -30,7 +29,7 @@ func TestBigEventGrowsTheBuffer(t *testing.T) {
 
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		actualLength := len(ev.Data()) + len(ev.Name()) + 8
+		actualLength := len(ev.Data) + len(ev.Name) + 8
 		assert.Equal(t, 32000, actualLength)
 	}
 }
@@ -40,8 +39,8 @@ func TestEventNameAndData(t *testing.T) {
 
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "some event", ev.Name())
-		assert.Equal(t, "some event value", string(ev.Data()))
+		assert.Equal(t, "some event", ev.Name)
+		assert.Equal(t, "some event value", ev.Data)
 	}
 }
 
@@ -51,15 +50,15 @@ func TestEventNameAndDataManyEvents(t *testing.T) {
 	ev1, err := decoder.Decode()
 	if assert.NoError(t, err) {
 		assert.NotNil(t, ev1)
-		assert.Equal(t, "first event", ev1.Name())
-		assert.Equal(t, "first value", string(ev1.Data()))
+		assert.Equal(t, "first event", ev1.Name)
+		assert.Equal(t, "first value", ev1.Data)
 	}
 
 	ev2, err := decoder.Decode()
 	if assert.NoError(t, err) {
 		assert.NotNil(t, ev2)
-		assert.Equal(t, "second event", ev2.Name())
-		assert.Equal(t, "second value", string(ev2.Data()))
+		assert.Equal(t, "second event", ev2.Name)
+		assert.Equal(t, "second value", ev2.Data)
 	}
 }
 
@@ -67,8 +66,8 @@ func TestStocksExample(t *testing.T) {
 	decoder := newDecoder("data: YHOO\ndata: +2\ndata: 10\n\n")
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "", ev.ID())
-		assert.Equal(t, "YHOO\n+2\n10", string(ev.Data()))
+		assert.Equal(t, "", ev.ID)
+		assert.Equal(t, "YHOO\n+2\n10", ev.Data)
 	}
 }
 
@@ -77,12 +76,12 @@ func TestFirstWhitespaceIsIgnored(t *testing.T) {
 
 	ev1, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "first", string(ev1.Data()))
+		assert.Equal(t, "first", ev1.Data)
 	}
 
 	ev2, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "second", string(ev2.Data()))
+		assert.Equal(t, "second", ev2.Data)
 	}
 }
 
@@ -90,7 +89,7 @@ func TestOnlyOneWhitespaceIsIgnored(t *testing.T) {
 	decoder := newDecoder("data:   first\n\n") // 3 whitespaces
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "  first", string(ev.Data())) // 2 whitespaces
+		assert.Equal(t, "  first", ev.Data) // 2 whitespaces
 	}
 }
 
@@ -99,12 +98,12 @@ func TestEventsWithNoDataThenWithNewLine(t *testing.T) {
 
 	ev1, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "", string(ev1.Data()))
+		assert.Equal(t, "", ev1.Data)
 	}
 
 	ev2, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "\n", string(ev2.Data()))
+		assert.Equal(t, "\n", ev2.Data)
 	}
 }
 
@@ -113,20 +112,20 @@ func TestCommentIsIgnoredAndDataIsNot(t *testing.T) {
 
 	ev1, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "1", ev1.ID())
-		assert.Equal(t, "first event", string(ev1.Data()))
+		assert.Equal(t, "1", ev1.ID)
+		assert.Equal(t, "first event", ev1.Data)
 	}
 
 	ev2, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "", ev2.ID())
-		assert.Equal(t, "second event", string(ev2.Data()))
+		assert.Equal(t, "", ev2.ID)
+		assert.Equal(t, "second event", ev2.Data)
 	}
 
 	ev3, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "", ev3.ID())
-		assert.Equal(t, " third event", string(ev3.Data()))
+		assert.Equal(t, "", ev3.ID)
+		assert.Equal(t, " third event", ev3.Data)
 	}
 }
 
@@ -135,7 +134,7 @@ func TestOneLineDataParseWithDoubleRN(t *testing.T) {
 
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "this is a test", string(ev.Data()))
+		assert.Equal(t, "this is a test", ev.Data)
 	}
 }
 
@@ -144,7 +143,7 @@ func TestOneLineDataParseWithoutDoubleRN(t *testing.T) {
 
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "this is a test", string(ev.Data()))
+		assert.Equal(t, "this is a test", ev.Data)
 	}
 }
 
@@ -153,7 +152,7 @@ func TestTwoLinesDataParseWithRNAndDoubleRN(t *testing.T) {
 
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "this is \na test", string(ev.Data()))
+		assert.Equal(t, "this is \na test", ev.Data)
 	}
 }
 
@@ -162,18 +161,8 @@ func TestNewLineWithCR(t *testing.T) {
 
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "name", ev.Name())
-		assert.Equal(t, "some\n data", string(ev.Data()))
-	}
-}
-
-func TestDecodeRetry(t *testing.T) {
-	decoder := newDecoder("retry: 100\nretry: a\n")
-	ev, err := decoder.Decode()
-	if assert.NoError(t, err) {
-		assert.Equal(t, time.Duration(100), ev.Retry())
-		_, err = decoder.Decode()
-		assert.Equal(t, io.EOF, err)
+		assert.Equal(t, "name", ev.Name)
+		assert.Equal(t, "some\n data", ev.Data)
 	}
 }
 
@@ -182,7 +171,7 @@ func TestPureLineFeedsWithCarriageReturn(t *testing.T) {
 	decoder := newDecoder("event: name\rdata: some\rdata:  data\r\r")
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "name", ev.Name())
-		assert.Equal(t, "some\n data", string(ev.Data()))
+		assert.Equal(t, "name", ev.Name)
+		assert.Equal(t, "some\n data", ev.Data)
 	}
 }
