@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-type ReadyState byte
+type ReadyState uint16
 
 const (
 	AllowedContentType = "text/event-stream"
