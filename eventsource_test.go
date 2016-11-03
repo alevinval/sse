@@ -34,7 +34,7 @@ func newServer() (*httptest.Server, *handler) {
 		ContentType: eventStream,
 		MaxRequests: 1,
 		events:      make(chan []byte),
-		closer:      make(chan struct{}, 1),
+		closer:      make(chan struct{}),
 	}
 	return httptest.NewServer(handler), handler
 }
@@ -52,14 +52,14 @@ func (s *handler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	for {
 		select {
+		case <-s.closer:
+			return
 		case event, ok := <-s.events:
 			if !ok {
 				return
 			}
 			rw.Write(event)
 			f.Flush()
-		case <-s.closer:
-			return
 		}
 	}
 }
@@ -97,7 +97,7 @@ func assertIsOpen(t *testing.T, es sse.EventSource, err error) bool {
 func closeTestServer(s *httptest.Server, h *handler) {
 	// The test finished and we are cleaning up: force the handler to return on any
 	// pending request.
-	h.Close()
+	go h.Close()
 
 	// Shutdown the test server.
 	s.Close()
@@ -231,7 +231,6 @@ func TestDropConnectionCannotReconnect(t *testing.T) {
 	es, err := sse.NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
 		handler.Close()
-		go handler.Send(tests.NewEventWithPadding(128))
 		_, ok := <-es.MessageEvents()
 		if assert.False(t, ok) {
 			assert.Equal(t, sse.Closed, es.ReadyState())
@@ -248,7 +247,10 @@ func TestDropConnectionCanReconnect(t *testing.T) {
 	es, err := sse.NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
 		handler.Close()
-		go handler.Send(tests.NewEventWithPadding(128))
+		go func() {
+			time.Sleep(25 * time.Millisecond)
+			handler.Send(tests.NewEventWithPadding(128))
+		}()
 		_, ok := <-es.MessageEvents()
 		if assert.True(t, ok) {
 			assert.Equal(t, sse.Open, es.ReadyState())

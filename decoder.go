@@ -8,6 +8,10 @@ import (
 	"strings"
 )
 
+// Default retry time in milliseconds.
+// The spec recommends to use a value of a few seconds.
+const defaultRetry = 2500
+
 type (
 	// Decoder interface decodes events from a reader input
 	Decoder interface {

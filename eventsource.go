@@ -51,9 +51,9 @@ type (
 // NewEventSource constructs returns an EventSource that satisfies the HTML5 EventSource specification.
 func NewEventSource(url string) (EventSource, error) {
 	es := eventSource{
-		d:            nil,
-		url:          url,
-		out:          make(chan *MessageEvent),
+		d:   nil,
+		url: url,
+		out: make(chan *MessageEvent),
 	}
 	return &es, es.connect()
 }
