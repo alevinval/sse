@@ -1,6 +1,6 @@
 package sse
 
-type Event struct {
+type MessageEvent struct {
 	LastEventID string
 	Name        string
 	Data        string

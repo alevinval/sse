@@ -32,14 +32,14 @@ type (
 	EventSource interface {
 		URL() (url string)
 		ReadyState() (state ReadyState)
-		Events() (events <-chan *Event)
+		MessageEvents() (events <-chan *MessageEvent)
 		Close()
 	}
 	eventSource struct {
 		url          string
 		d            Decoder
 		resp         *http.Response
-		out          chan *Event
+		out          chan *MessageEvent
 		closeOutOnce chan struct{}
 
 		// Status of the event stream.
@@ -53,7 +53,7 @@ func NewEventSource(url string) (EventSource, error) {
 	es := eventSource{
 		d:            nil,
 		url:          url,
-		out:          make(chan *Event),
+		out:          make(chan *MessageEvent),
 	}
 	return &es, es.connect()
 }
@@ -169,9 +169,9 @@ func (es *eventSource) setReadyState(newState ReadyState) {
 	es.readyState = newState
 }
 
-// Returns the channel of events. Events will be queued in the channel as they
+// Returns the channel of events. MessageEvents will be queued in the channel as they
 // are received.
-func (es *eventSource) Events() <-chan *Event {
+func (es *eventSource) MessageEvents() <-chan *MessageEvent {
 	return es.out
 }
 

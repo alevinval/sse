@@ -127,7 +127,7 @@ func TestNewEventSourceWithInvalidContentType(t *testing.T) {
 		assert.Equal(t, sse.ErrContentType, err)
 		assert.Equal(t, s.URL, es.URL())
 		assert.Equal(t, sse.Closed, es.ReadyState())
-		_, ok := <-es.Events()
+		_, ok := <-es.MessageEvents()
 		assert.False(t, ok)
 	}
 	assertCloseClient(t, es)
@@ -141,7 +141,7 @@ func TestNewEventSourceWithRightContentType(t *testing.T) {
 	if assertIsOpen(t, es, err) {
 		ev := tests.NewEventWithPadding(128)
 		go handler.SendAndClose(ev)
-		recv, ok := <-es.Events()
+		recv, ok := <-es.MessageEvents()
 		if assert.True(t, ok) {
 			assert.Equal(t, tests.GetPaddedEventData(ev), recv.Data)
 		}
@@ -157,7 +157,7 @@ func TestNewEventSourceSendingEvent(t *testing.T) {
 	if assertIsOpen(t, es, err) {
 		expectedEvent := tests.NewEventWithPadding(2 << 10)
 		go handler.SendAndClose(expectedEvent)
-		ev, ok := <-es.Events()
+		ev, ok := <-es.MessageEvents()
 		if assert.True(t, ok) {
 			assert.Equal(t, tests.GetPaddedEventData(expectedEvent), ev.Data)
 		}
@@ -177,14 +177,14 @@ func TestEventSourceLastEventID(t *testing.T) {
 		expectedID := "123"
 
 		go handler.Send(eventBytes)
-		ev, ok := <-es.Events()
+		ev, ok := <-es.MessageEvents()
 		if assert.True(t, ok) {
 			assert.Equal(t, expectedID, ev.LastEventID)
 			assert.Equal(t, expectedData, ev.Data)
 		}
 
 		go handler.Send(tests.NewEventWithPadding(32))
-		ev, ok = <-es.Events()
+		ev, ok = <-es.MessageEvents()
 		if assert.True(t, ok) {
 			assert.Equal(t, expectedID, ev.LastEventID)
 		}
@@ -204,7 +204,7 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 		handler.Close()
 		go handler.Send(tests.NewEventWithPadding(128))
 		select {
-		case _, ok := <-es.Events():
+		case _, ok := <-es.MessageEvents():
 			assert.True(t, ok)
 		case <-timeout(150 * time.Millisecond):
 			assert.Fail(t, "event source did not reconnect within the allowed time.")
@@ -215,7 +215,7 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 		handler.Close()
 		go handler.Send(tests.NewEventWithPadding(128))
 		select {
-		case _, ok := <-es.Events():
+		case _, ok := <-es.MessageEvents():
 			assert.True(t, ok)
 		case <-timeout(10 * time.Millisecond):
 			assert.Fail(t, "event source did not reconnect within the allowed time.")
@@ -232,7 +232,7 @@ func TestDropConnectionCannotReconnect(t *testing.T) {
 	if assertIsOpen(t, es, err) {
 		handler.Close()
 		go handler.Send(tests.NewEventWithPadding(128))
-		_, ok := <-es.Events()
+		_, ok := <-es.MessageEvents()
 		if assert.False(t, ok) {
 			assert.Equal(t, sse.Closed, es.ReadyState())
 		}
@@ -249,7 +249,7 @@ func TestDropConnectionCanReconnect(t *testing.T) {
 	if assertIsOpen(t, es, err) {
 		handler.Close()
 		go handler.Send(tests.NewEventWithPadding(128))
-		_, ok := <-es.Events()
+		_, ok := <-es.MessageEvents()
 		if assert.True(t, ok) {
 			assert.Equal(t, sse.Open, es.ReadyState())
 		}

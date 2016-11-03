@@ -11,7 +11,7 @@ import (
 type (
 	// Decoder interface decodes events from a reader input
 	Decoder interface {
-		Decode() (ev *Event, err error)
+		Decode() (ev *MessageEvent, err error)
 		Retry() (retry int)
 	}
 	decoder struct {
@@ -27,7 +27,7 @@ func (d *decoder) Retry() int {
 }
 
 // Decode reads the input stream and interprets the events in it. Any error while reading is  returned.
-func (d *decoder) Decode() (*Event, error) {
+func (d *decoder) Decode() (*MessageEvent, error) {
 	// Stores event data, which is filled after one or many lines from the reader
 	var name string
 	var eventSeen bool
@@ -49,7 +49,7 @@ func (d *decoder) Decode() (*Event, error) {
 				// the name of any event as defined in the DOM Events spec.
 				// Decoder does not perform this check, hence it could yield
 				// events that would not be valid in a browser.
-				return &Event{d.lastEventID, name, data.String()}, nil
+				return &MessageEvent{d.lastEventID, name, data.String()}, nil
 			}
 			continue
 		}
