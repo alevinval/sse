@@ -11,18 +11,25 @@ import (
 type (
 	// Decoder interface decodes events from a reader input
 	Decoder interface {
-		Decode() (*Event, error)
+		Decode() (ev *Event, err error)
+		Retry() (retry int)
 	}
 	decoder struct {
-		scanner *bufio.Scanner
-		data    *bytes.Buffer
+		lastEventID string
+		retry       int
+		scanner     *bufio.Scanner
+		data        *bytes.Buffer
 	}
 )
+
+func (d *decoder) Retry() int {
+	return d.retry
+}
 
 // Decode reads the input stream and interprets the events in it. Any error while reading is  returned.
 func (d *decoder) Decode() (*Event, error) {
 	// Stores event data, which is filled after one or many lines from the reader
-	var id, name string
+	var name string
 	var eventSeen bool
 
 	scanner := d.scanner
@@ -37,13 +44,12 @@ func (d *decoder) Decode() (*Event, error) {
 				if l := data.Len(); l > 0 {
 					data.Truncate(l - 1)
 				}
-
 				// Note the event source spec as defined by w3.org requires
 				// skips the event dispatching if the event name collides with
 				// the name of any event as defined in the DOM Events spec.
 				// Decoder does not perform this check, hence it could yield
 				// events that would not be valid in a browser.
-				return &Event{id, name, string(data.Bytes()), -1}, nil
+				return &Event{d.lastEventID, name, data.String()}, nil
 			}
 			continue
 		}
@@ -78,13 +84,14 @@ func (d *decoder) Decode() (*Event, error) {
 			data.WriteByte('\n')
 			eventSeen = true
 		case "id":
-			id = value
+			d.lastEventID = value
 			eventSeen = true
 		case "retry":
 			retry, err := strconv.Atoi(value)
 			if err == nil && retry >= 0 {
-				return &Event{retry: retry}, nil
+				d.retry = retry
 			}
+
 		default:
 			// Ignore field
 		}

@@ -19,7 +19,7 @@ func NewDecoder(in io.Reader) Decoder {
 //
 // This constructor is only available on go >= 1.6
 func NewDecoderSize(in io.Reader, bufferSize int) Decoder {
-	d := &decoder{bufio.NewScanner(in), new(bytes.Buffer)}
+	d := &decoder{scanner: bufio.NewScanner(in), data: new(bytes.Buffer), retry: 1000}
 	if bufferSize > 0 {
 		d.scanner.Buffer(make([]byte, bufferSize), bufferSize)
 	}

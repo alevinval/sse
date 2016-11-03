@@ -179,14 +179,14 @@ func TestEventSourceLastEventID(t *testing.T) {
 		go handler.Send(eventBytes)
 		ev, ok := <-es.Events()
 		if assert.True(t, ok) {
-			assert.Equal(t, expectedID, es.LastEventID())
+			assert.Equal(t, expectedID, ev.LastEventID)
 			assert.Equal(t, expectedData, ev.Data)
 		}
 
 		go handler.Send(tests.NewEventWithPadding(32))
-		_, ok = <-es.Events()
+		ev, ok = <-es.Events()
 		if assert.True(t, ok) {
-			assert.Equal(t, expectedID, es.LastEventID())
+			assert.Equal(t, expectedID, ev.LastEventID)
 		}
 	}
 	assertCloseClient(t, es)
