@@ -34,7 +34,7 @@ func newServer() (*httptest.Server, *handler) {
 		ContentType: eventStream,
 		MaxRequests: 1,
 		events:      make(chan []byte),
-		closer:      make(chan struct{}),
+		closer:      make(chan struct{}, 1),
 	}
 	return httptest.NewServer(handler), handler
 }
@@ -97,7 +97,7 @@ func assertIsOpen(t *testing.T, es sse.EventSource, err error) bool {
 func closeTestServer(s *httptest.Server, h *handler) {
 	// The test finished and we are cleaning up: force the handler to return on any
 	// pending request.
-	go h.Close()
+	h.Close()
 
 	// Shutdown the test server.
 	s.Close()

@@ -61,16 +61,11 @@ type (
 // NewEventSource constructs returns an EventSource that satisfies the HTML5 EventSource specification.
 func NewEventSource(url string) (EventSource, error) {
 	es := eventSource{
-		d:            nil,
-		url:          url,
-		out:          make(chan *Event),
-		closeOutOnce: make(chan struct{}),
-		retry:        defaultRetry,
+		d:     nil,
+		url:   url,
+		out:   make(chan *Event),
+		retry: defaultRetry,
 	}
-
-	// Ensure the output channel is closed only once.
-	go es.closeOnce()
-
 	return &es, es.connect()
 }
 
@@ -105,8 +100,8 @@ func (es *eventSource) connectOnce() (err error) {
 	if err != nil {
 		return
 	}
-	es.d = NewDecoder(es.resp.Body)
 	es.setReadyState(Open)
+	es.d = NewDecoder(es.resp.Body)
 	go es.consume()
 	return
 }
@@ -139,7 +134,6 @@ func (es *eventSource) consume() {
 		if err != nil {
 			if es.mustReconnect(err) {
 				err = es.reconnect()
-				return
 			}
 			es.Close()
 			return
@@ -185,6 +179,11 @@ func (es *eventSource) ReadyState() ReadyState {
 func (es *eventSource) setReadyState(newState ReadyState) {
 	es.readyStateMux.Lock()
 	defer es.readyStateMux.Unlock()
+
+	// Once the EventSource is closed, its ready state cannot change anymore.
+	if es.readyState == Closed {
+		return
+	}
 	es.readyState = newState
 }
 
@@ -210,28 +209,23 @@ func (es *eventSource) Events() <-chan *Event {
 // Closes the event source.
 // After closing the event source, it cannot be reused again.
 func (es *eventSource) Close() {
-	state := es.ReadyState()
-	if state == Closed || state == Closing {
-		return
-	}
-	es.setReadyState(Closing)
-	if es.resp != nil {
-		es.resp.Body.Close()
-	}
-	es.sendClose()
-	es.setReadyState(Closed)
-}
-
-func (es *eventSource) sendClose() {
-	select {
-	case es.closeOutOnce <- struct{}{}:
-	default:
-	}
-}
-
-func (es *eventSource) closeOnce() {
-	select {
-	case <-es.closeOutOnce:
+	if es.acquireClosingRight() {
+		if es.resp != nil {
+			es.resp.Body.Close()
+		}
 		close(es.out)
+		es.setReadyState(Closed)
 	}
+}
+
+// Acquires closing right by setting readyState to Closing if no one else
+// is attempting to close the EventSource.
+func (es *eventSource) acquireClosingRight() bool {
+	es.readyStateMux.Lock()
+	defer es.readyStateMux.Unlock()
+	if es.readyState == Closed || es.readyState == Closing {
+		return false
+	}
+	es.readyState = Closing
+	return true
 }
