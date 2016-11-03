@@ -34,7 +34,7 @@ func newServer() (*httptest.Server, *handler) {
 		ContentType: eventStream,
 		MaxRequests: 1,
 		events:      make(chan []byte),
-		closer:      make(chan struct{}, 1),
+		closer:      make(chan struct{}),
 	}
 	return httptest.NewServer(handler), handler
 }
@@ -52,14 +52,14 @@ func (s *handler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	for {
 		select {
+		case <-s.closer:
+			return
 		case event, ok := <-s.events:
 			if !ok {
 				return
 			}
 			rw.Write(event)
 			f.Flush()
-		case <-s.closer:
-			return
 		}
 	}
 }
@@ -97,7 +97,7 @@ func assertIsOpen(t *testing.T, es sse.EventSource, err error) bool {
 func closeTestServer(s *httptest.Server, h *handler) {
 	// The test finished and we are cleaning up: force the handler to return on any
 	// pending request.
-	h.Close()
+	go h.Close()
 
 	// Shutdown the test server.
 	s.Close()
@@ -127,7 +127,7 @@ func TestNewEventSourceWithInvalidContentType(t *testing.T) {
 		assert.Equal(t, sse.ErrContentType, err)
 		assert.Equal(t, s.URL, es.URL())
 		assert.Equal(t, sse.Closed, es.ReadyState())
-		_, ok := <-es.Events()
+		_, ok := <-es.MessageEvents()
 		assert.False(t, ok)
 	}
 	assertCloseClient(t, es)
@@ -141,7 +141,7 @@ func TestNewEventSourceWithRightContentType(t *testing.T) {
 	if assertIsOpen(t, es, err) {
 		ev := tests.NewEventWithPadding(128)
 		go handler.SendAndClose(ev)
-		recv, ok := <-es.Events()
+		recv, ok := <-es.MessageEvents()
 		if assert.True(t, ok) {
 			assert.Equal(t, tests.GetPaddedEventData(ev), recv.Data)
 		}
@@ -157,7 +157,7 @@ func TestNewEventSourceSendingEvent(t *testing.T) {
 	if assertIsOpen(t, es, err) {
 		expectedEvent := tests.NewEventWithPadding(2 << 10)
 		go handler.SendAndClose(expectedEvent)
-		ev, ok := <-es.Events()
+		ev, ok := <-es.MessageEvents()
 		if assert.True(t, ok) {
 			assert.Equal(t, tests.GetPaddedEventData(expectedEvent), ev.Data)
 		}
@@ -177,16 +177,16 @@ func TestEventSourceLastEventID(t *testing.T) {
 		expectedID := "123"
 
 		go handler.Send(eventBytes)
-		ev, ok := <-es.Events()
+		ev, ok := <-es.MessageEvents()
 		if assert.True(t, ok) {
-			assert.Equal(t, expectedID, es.LastEventID())
+			assert.Equal(t, expectedID, ev.LastEventID)
 			assert.Equal(t, expectedData, ev.Data)
 		}
 
 		go handler.Send(tests.NewEventWithPadding(32))
-		_, ok = <-es.Events()
+		ev, ok = <-es.MessageEvents()
 		if assert.True(t, ok) {
-			assert.Equal(t, expectedID, es.LastEventID())
+			assert.Equal(t, expectedID, ev.LastEventID)
 		}
 	}
 	assertCloseClient(t, es)
@@ -204,7 +204,7 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 		handler.Close()
 		go handler.Send(tests.NewEventWithPadding(128))
 		select {
-		case _, ok := <-es.Events():
+		case _, ok := <-es.MessageEvents():
 			assert.True(t, ok)
 		case <-timeout(150 * time.Millisecond):
 			assert.Fail(t, "event source did not reconnect within the allowed time.")
@@ -215,7 +215,7 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 		handler.Close()
 		go handler.Send(tests.NewEventWithPadding(128))
 		select {
-		case _, ok := <-es.Events():
+		case _, ok := <-es.MessageEvents():
 			assert.True(t, ok)
 		case <-timeout(10 * time.Millisecond):
 			assert.Fail(t, "event source did not reconnect within the allowed time.")
@@ -231,8 +231,7 @@ func TestDropConnectionCannotReconnect(t *testing.T) {
 	es, err := sse.NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
 		handler.Close()
-		go handler.Send(tests.NewEventWithPadding(128))
-		_, ok := <-es.Events()
+		_, ok := <-es.MessageEvents()
 		if assert.False(t, ok) {
 			assert.Equal(t, sse.Closed, es.ReadyState())
 		}
@@ -248,8 +247,11 @@ func TestDropConnectionCanReconnect(t *testing.T) {
 	es, err := sse.NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
 		handler.Close()
-		go handler.Send(tests.NewEventWithPadding(128))
-		_, ok := <-es.Events()
+		go func() {
+			time.Sleep(25 * time.Millisecond)
+			handler.Send(tests.NewEventWithPadding(128))
+		}()
+		_, ok := <-es.MessageEvents()
 		if assert.True(t, ok) {
 			assert.Equal(t, sse.Open, es.ReadyState())
 		}

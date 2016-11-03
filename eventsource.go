@@ -21,8 +21,6 @@ const (
 	Closing
 	// Closed after the connection is closed.
 	Closed
-
-	defaultRetry = 1 * time.Second
 )
 
 var (
@@ -34,37 +32,28 @@ type (
 	EventSource interface {
 		URL() (url string)
 		ReadyState() (state ReadyState)
-		LastEventID() (id string)
-		Events() (events <-chan *Event)
+		MessageEvents() (events <-chan *MessageEvent)
 		Close()
 	}
 	eventSource struct {
 		url          string
 		d            Decoder
 		resp         *http.Response
-		out          chan *Event
+		out          chan *MessageEvent
 		closeOutOnce chan struct{}
-
-		// Last recorded event ID
-		lastEventID    string
-		lastEventIDMux sync.RWMutex
 
 		// Status of the event stream.
 		readyState    ReadyState
 		readyStateMux sync.RWMutex
-
-		// Reconnection waiting time
-		retry time.Duration
 	}
 )
 
 // NewEventSource constructs returns an EventSource that satisfies the HTML5 EventSource specification.
 func NewEventSource(url string) (EventSource, error) {
 	es := eventSource{
-		d:     nil,
-		url:   url,
-		out:   make(chan *Event),
-		retry: defaultRetry,
+		d:   nil,
+		url: url,
+		out: make(chan *MessageEvent),
 	}
 	return &es, es.connect()
 }
@@ -75,7 +64,7 @@ func (es *eventSource) connect() (err error) {
 	es.setReadyState(Connecting)
 	err = es.connectOnce()
 	if err != nil {
-		err = es.reconnect()
+		es.Close()
 	}
 	return
 }
@@ -85,7 +74,7 @@ func (es *eventSource) connect() (err error) {
 func (es *eventSource) reconnect() (err error) {
 	es.setReadyState(Connecting)
 	for es.mustReconnect(err) {
-		time.Sleep(es.retry)
+		time.Sleep(time.Duration(es.d.Retry()) * time.Millisecond)
 		err = es.connectOnce()
 	}
 	if err != nil {
@@ -138,13 +127,6 @@ func (es *eventSource) consume() {
 			es.Close()
 			return
 		}
-		if ev.retry >= 0 {
-			es.retry = time.Duration(ev.retry) * time.Millisecond
-			continue
-		}
-		if ev.ID != "" {
-			es.setLastEventID(ev.ID)
-		}
 		es.out <- ev
 	}
 }
@@ -187,22 +169,9 @@ func (es *eventSource) setReadyState(newState ReadyState) {
 	es.readyState = newState
 }
 
-// Returns the last event source Event id.
-func (es *eventSource) LastEventID() string {
-	es.lastEventIDMux.RLock()
-	defer es.lastEventIDMux.RUnlock()
-	return es.lastEventID
-}
-
-func (es *eventSource) setLastEventID(id string) {
-	es.lastEventIDMux.Lock()
-	defer es.lastEventIDMux.Unlock()
-	es.lastEventID = id
-}
-
-// Returns the channel of events. Events will be queued in the channel as they
+// Returns the channel of events. MessageEvents will be queued in the channel as they
 // are received.
-func (es *eventSource) Events() <-chan *Event {
+func (es *eventSource) MessageEvents() <-chan *MessageEvent {
 	return es.out
 }
 
