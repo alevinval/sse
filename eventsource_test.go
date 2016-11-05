@@ -25,14 +25,17 @@ type handler struct {
 	// to properly indicate there is nothing left to stream.
 	MaxRequests int
 
-	events chan string
-	closer chan struct{}
+	t           *testing.T
+	lastEventID string
+	events      chan string
+	closer      chan struct{}
 }
 
-func newServer() (*httptest.Server, *handler) {
+func newServer(t *testing.T) (*httptest.Server, *handler) {
 	handler := &handler{
 		ContentType: eventStream,
 		MaxRequests: 1,
+		t:           t,
 		events:      make(chan string),
 		closer:      make(chan struct{}),
 	}
@@ -42,6 +45,13 @@ func newServer() (*httptest.Server, *handler) {
 func (h *handler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	rw.Header().Set("Connection", "keep-alive")
 	rw.Header().Set("Content-Type", h.ContentType)
+
+	// Assert sse.EventSource follows the spec and provides the Last-Event-ID header.
+	if !assert.Equal(h.t, h.lastEventID, req.Header.Get("Last-Event-ID"), "spec violation: eventsource reconnected without providing the last event id.") {
+		rw.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	if h.MaxRequests <= 0 {
 		rw.WriteHeader(http.StatusNoContent)
 		return
@@ -71,6 +81,7 @@ func (h *handler) SendAndClose(ev *sse.MessageEvent) {
 
 func (h *handler) Send(ev *sse.MessageEvent) {
 	h.SendString(tests.MessageEventToString(ev))
+	h.lastEventID = ev.LastEventID
 }
 
 func (h *handler) SendString(data string) {
@@ -122,7 +133,7 @@ func TestEventSourceStates(t *testing.T) {
 }
 
 func TestNewEventSourceWithInvalidContentType(t *testing.T) {
-	s, handler := newServer()
+	s, handler := newServer(t)
 	defer closeTestServer(s, handler)
 	handler.ContentType = textPlain
 
@@ -138,7 +149,7 @@ func TestNewEventSourceWithInvalidContentType(t *testing.T) {
 }
 
 func TestNewEventSourceWithRightContentType(t *testing.T) {
-	s, handler := newServer()
+	s, handler := newServer(t)
 	defer closeTestServer(s, handler)
 
 	es, err := sse.NewEventSource(s.URL)
@@ -154,7 +165,7 @@ func TestNewEventSourceWithRightContentType(t *testing.T) {
 }
 
 func TestNewEventSourceSendingEvent(t *testing.T) {
-	s, handler := newServer()
+	s, handler := newServer(t)
 	defer closeTestServer(s, handler)
 
 	es, err := sse.NewEventSource(s.URL)
@@ -170,7 +181,7 @@ func TestNewEventSourceSendingEvent(t *testing.T) {
 }
 
 func TestEventSourceLastEventID(t *testing.T) {
-	s, handler := newServer()
+	s, handler := newServer(t)
 	defer closeTestServer(s, handler)
 
 	es, err := sse.NewEventSource(s.URL)
@@ -193,7 +204,7 @@ func TestEventSourceLastEventID(t *testing.T) {
 }
 
 func TestEventSourceRetryIsRespected(t *testing.T) {
-	s, handler := newServer()
+	s, handler := newServer(t)
 	defer closeTestServer(s, handler)
 	handler.MaxRequests = 3
 
@@ -225,7 +236,7 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 }
 
 func TestDropConnectionCannotReconnect(t *testing.T) {
-	s, handler := newServer()
+	s, handler := newServer(t)
 	defer closeTestServer(s, handler)
 
 	es, err := sse.NewEventSource(s.URL)
@@ -240,7 +251,7 @@ func TestDropConnectionCannotReconnect(t *testing.T) {
 }
 
 func TestDropConnectionCanReconnect(t *testing.T) {
-	s, handler := newServer()
+	s, handler := newServer(t)
 	defer closeTestServer(s, handler)
 	handler.MaxRequests = 2
 
@@ -255,6 +266,26 @@ func TestDropConnectionCanReconnect(t *testing.T) {
 		if assert.True(t, ok) {
 			assert.Equal(t, sse.Open, es.ReadyState())
 		}
+	}
+	assertCloseClient(t, es)
+}
+
+func TestLastEventIDHeaderOnReconnecting(t *testing.T) {
+	s, handler := newServer(t)
+	defer closeTestServer(s, handler)
+	handler.MaxRequests = 2
+
+	es, err := sse.NewEventSource(s.URL)
+	if assertIsOpen(t, es, err) {
+		handler.SendString(tests.NewRetryEvent(1))
+		expectedEv := tests.NewMessageEvent("abc", "", 128)
+		go handler.SendAndClose(expectedEv)
+		_, ok := <-es.MessageEvents()
+		assert.True(t, ok)
+
+		go handler.Send(tests.NewMessageEvent("def", "", 128))
+		_, ok = <-es.MessageEvents()
+		assert.True(t, ok)
 	}
 	assertCloseClient(t, es)
 }
