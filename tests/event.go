@@ -1,18 +1,40 @@
 package tests
 
+import (
+	"fmt"
+
+	"github.com/mubit/sse"
+)
+
 // NewEventWithPadding creates a raw slice of bytes with an event that does
 // not exceed the specified size.
-func NewEventWithPadding(size int) []byte {
-	event := []byte("data: ")
-	paddingByte := byte('e')
-	for x := 0; x < size-8; x++ {
-		event = append(event, paddingByte)
+func NewMessageEvent(lastEventID, name string, dataSize int) *sse.MessageEvent {
+	data := make([]byte, dataSize)
+	for i := range data {
+		data[i] = 'e'
 	}
-	return append(event, []byte("\n\n")...)
+	return &sse.MessageEvent{LastEventID: lastEventID, Name: name, Data: string(data)}
 }
 
-// GetPaddedEventData returns the event data as it would be returned from
-// .Data on the dispatched event.
-func GetPaddedEventData(b []byte) string {
-	return string(b[6 : len(b)-2])
+func NewRetryEvent(ms int) string {
+	return fmt.Sprintf("retry: %d\n", ms)
+}
+
+// MessageEventToString encodes sse.MessageEvent into a string.
+func MessageEventToString(ev *sse.MessageEvent) string {
+	data := []byte{}
+	if ev.LastEventID != "" {
+		data = append(data, "id: "...)
+		data = append(data, ev.LastEventID...)
+		data = append(data, "\n"...)
+	}
+	if ev.Name != "" {
+		data = append(data, "event: "...)
+		data = append(data, ev.Name...)
+		data = append(data, "\n"...)
+	}
+	data = append(data, "data: "...)
+	data = append(data, ev.Data...)
+	data = append(data, "\n\n"...)
+	return string(data)
 }
