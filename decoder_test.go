@@ -24,13 +24,14 @@ func TestEOFIsReturned(t *testing.T) {
 }
 
 func TestBigEventGrowsTheBuffer(t *testing.T) {
-	bigEvent := tests.NewEventWithPadding(32000)
-	decoder := newDecoder(string(bigEvent))
+	expectedEv := tests.NewMessageEvent("", "", 32000)
+	decoder := newDecoder(tests.MessageEventToString(expectedEv))
 
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		actualLength := len(ev.Data) + len(ev.Name) + 8
-		assert.Equal(t, 32000, actualLength)
+		assert.Equal(t, expectedEv.LastEventID, ev.LastEventID)
+		assert.Equal(t, expectedEv.Name, ev.Name)
+		assert.Equal(t, expectedEv.Data, ev.Data)
 	}
 }
 

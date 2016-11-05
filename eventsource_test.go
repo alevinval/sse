@@ -25,7 +25,7 @@ type handler struct {
 	// to properly indicate there is nothing left to stream.
 	MaxRequests int
 
-	events chan []byte
+	events chan string
 	closer chan struct{}
 }
 
@@ -33,48 +33,52 @@ func newServer() (*httptest.Server, *handler) {
 	handler := &handler{
 		ContentType: eventStream,
 		MaxRequests: 1,
-		events:      make(chan []byte),
+		events:      make(chan string),
 		closer:      make(chan struct{}),
 	}
 	return httptest.NewServer(handler), handler
 }
 
-func (s *handler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+func (h *handler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	rw.Header().Set("Connection", "keep-alive")
-	rw.Header().Set("Content-Type", s.ContentType)
-	if s.MaxRequests <= 0 {
+	rw.Header().Set("Content-Type", h.ContentType)
+	if h.MaxRequests <= 0 {
 		rw.WriteHeader(http.StatusNoContent)
 		return
 	}
-	s.MaxRequests--
+	h.MaxRequests--
 	f, _ := rw.(http.Flusher)
 	f.Flush()
 
 	for {
 		select {
-		case <-s.closer:
+		case <-h.closer:
 			return
-		case event, ok := <-s.events:
+		case event, ok := <-h.events:
 			if !ok {
 				return
 			}
-			rw.Write(event)
+			rw.Write([]byte(event))
 			f.Flush()
 		}
 	}
 }
 
-func (s *handler) SendAndClose(data []byte) {
-	s.Send(data)
-	s.Close()
+func (h *handler) SendAndClose(ev *sse.MessageEvent) {
+	h.Send(ev)
+	h.Close()
 }
 
-func (s *handler) Send(data []byte) {
-	s.events <- data
+func (h *handler) Send(ev *sse.MessageEvent) {
+	h.SendString(tests.MessageEventToString(ev))
 }
 
-func (s *handler) Close() {
-	s.closer <- struct{}{}
+func (h *handler) SendString(data string) {
+	h.events <- data
+}
+
+func (h *handler) Close() {
+	h.closer <- struct{}{}
 }
 
 // Asserts an sse.EventSource has Closed readyState after calling Close on it.
@@ -139,11 +143,11 @@ func TestNewEventSourceWithRightContentType(t *testing.T) {
 
 	es, err := sse.NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
-		ev := tests.NewEventWithPadding(128)
-		go handler.SendAndClose(ev)
-		recv, ok := <-es.MessageEvents()
+		expectedEv := tests.NewMessageEvent("", "", 128)
+		go handler.SendAndClose(expectedEv)
+		ev, ok := <-es.MessageEvents()
 		if assert.True(t, ok) {
-			assert.Equal(t, tests.GetPaddedEventData(ev), recv.Data)
+			assert.Equal(t, expectedEv.Data, ev.Data)
 		}
 	}
 	assertCloseClient(t, es)
@@ -155,11 +159,11 @@ func TestNewEventSourceSendingEvent(t *testing.T) {
 
 	es, err := sse.NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
-		expectedEvent := tests.NewEventWithPadding(2 << 10)
+		expectedEvent := tests.NewMessageEvent("", "", 1024)
 		go handler.SendAndClose(expectedEvent)
 		ev, ok := <-es.MessageEvents()
 		if assert.True(t, ok) {
-			assert.Equal(t, tests.GetPaddedEventData(expectedEvent), ev.Data)
+			assert.Equal(t, expectedEvent.Data, ev.Data)
 		}
 	}
 	assertCloseClient(t, es)
@@ -171,22 +175,18 @@ func TestEventSourceLastEventID(t *testing.T) {
 
 	es, err := sse.NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
-		eventBytes := tests.NewEventWithPadding(2 << 8)
-		expectedData := tests.GetPaddedEventData(eventBytes)
-		eventBytes = append([]byte("id: 123\n"), eventBytes...)
-		expectedID := "123"
-
-		go handler.Send(eventBytes)
+		expectedEv := tests.NewMessageEvent("123", "", 512)
+		go handler.Send(expectedEv)
 		ev, ok := <-es.MessageEvents()
 		if assert.True(t, ok) {
-			assert.Equal(t, expectedID, ev.LastEventID)
-			assert.Equal(t, expectedData, ev.Data)
+			assert.Equal(t, expectedEv.LastEventID, ev.LastEventID)
+			assert.Equal(t, expectedEv.Data, ev.Data)
 		}
 
-		go handler.Send(tests.NewEventWithPadding(32))
+		go handler.Send(tests.NewMessageEvent("", "", 32))
 		ev, ok = <-es.MessageEvents()
 		if assert.True(t, ok) {
-			assert.Equal(t, expectedID, ev.LastEventID)
+			assert.Equal(t, expectedEv.LastEventID, ev.LastEventID)
 		}
 	}
 	assertCloseClient(t, es)
@@ -200,9 +200,9 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 	es, err := sse.NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
 		// Big retry
-		handler.Send([]byte("retry: 100\n"))
+		handler.SendString(tests.NewRetryEvent(100))
 		handler.Close()
-		go handler.Send(tests.NewEventWithPadding(128))
+		go handler.Send(tests.NewMessageEvent("", "", 128))
 		select {
 		case _, ok := <-es.MessageEvents():
 			assert.True(t, ok)
@@ -211,9 +211,9 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 		}
 
 		// Smaller retry
-		handler.Send([]byte("retry: 1\n"))
+		handler.SendString(tests.NewRetryEvent(1))
 		handler.Close()
-		go handler.Send(tests.NewEventWithPadding(128))
+		go handler.Send(tests.NewMessageEvent("", "", 128))
 		select {
 		case _, ok := <-es.MessageEvents():
 			assert.True(t, ok)
@@ -249,7 +249,7 @@ func TestDropConnectionCanReconnect(t *testing.T) {
 		handler.Close()
 		go func() {
 			time.Sleep(25 * time.Millisecond)
-			handler.Send(tests.NewEventWithPadding(128))
+			handler.Send(tests.NewMessageEvent("", "", 128))
 		}()
 		_, ok := <-es.MessageEvents()
 		if assert.True(t, ok) {

@@ -40,7 +40,6 @@ type (
 		d            Decoder
 		resp         *http.Response
 		out          chan *MessageEvent
-		closeOutOnce chan struct{}
 
 		// Status of the event stream.
 		readyState    ReadyState
