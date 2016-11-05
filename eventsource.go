@@ -36,10 +36,11 @@ type (
 		Close()
 	}
 	eventSource struct {
-		url          string
-		d            Decoder
-		resp         *http.Response
-		out          chan *MessageEvent
+		url         string
+		lastEventID string
+		d           Decoder
+		resp        *http.Response
+		out         chan *MessageEvent
 
 		// Status of the event stream.
 		readyState    ReadyState
@@ -84,7 +85,7 @@ func (es *eventSource) reconnect() (err error) {
 
 // Attempts to connect and updates internal status depending on the outcome.
 func (es *eventSource) connectOnce() (err error) {
-	es.resp, err = es.doHttpConnect()
+	es.resp, err = es.doHTTPConnect()
 	if err != nil {
 		return
 	}
@@ -94,7 +95,7 @@ func (es *eventSource) connectOnce() (err error) {
 	return
 }
 
-func (es *eventSource) doHttpConnect() (*http.Response, error) {
+func (es *eventSource) doHTTPConnect() (*http.Response, error) {
 	// Prepare request
 	req, err := http.NewRequest("GET", es.url, nil)
 	if err != nil {
@@ -102,6 +103,9 @@ func (es *eventSource) doHttpConnect() (*http.Response, error) {
 	}
 	req.Header.Set("Accept", AllowedContentType)
 	req.Header.Set("Cache-Control", "no-store")
+	if es.lastEventID != "" {
+		req.Header.Set("Last-Event-ID", es.lastEventID)
+	}
 
 	// Check response
 	resp, err := http.DefaultClient.Do(req)
@@ -126,6 +130,7 @@ func (es *eventSource) consume() {
 			es.Close()
 			return
 		}
+		es.lastEventID = ev.LastEventID
 		es.out <- ev
 	}
 }
