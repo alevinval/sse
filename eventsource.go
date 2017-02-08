@@ -31,29 +31,30 @@ type (
 	// EventSource connects and processes events from an SSE stream.
 	EventSource interface {
 		URL() (url string)
-		ReadyState() (state ReadyState)
+		ReadyState() <-chan ReadyState
 		MessageEvents() (events <-chan *MessageEvent)
 		Close()
 	}
 	eventSource struct {
-		url         string
-		lastEventID string
-		d           Decoder
-		resp        *http.Response
-		out         chan *MessageEvent
+		url               string
+		lastEventID       string
+		d                 Decoder
+		resp              *http.Response
+		out               chan *MessageEvent
+		readyStateUpdates chan ReadyState
 
-		// Status of the event stream.
-		readyState    ReadyState
-		readyStateMux sync.RWMutex
+		closed    bool
+		closedMux sync.RWMutex
 	}
 )
 
 // NewEventSource constructs returns an EventSource that satisfies the HTML5 EventSource specification.
 func NewEventSource(url string) (EventSource, error) {
 	es := eventSource{
-		d:   nil,
-		url: url,
-		out: make(chan *MessageEvent),
+		d:                 nil,
+		url:               url,
+		out:               make(chan *MessageEvent),
+		readyStateUpdates: make(chan ReadyState, 3),
 	}
 	return &es, es.connect()
 }
@@ -61,7 +62,7 @@ func NewEventSource(url string) (EventSource, error) {
 // connect does a connection attempt, if the operation fails, attempt reconnecting
 // according to the spec.
 func (es *eventSource) connect() (err error) {
-	es.setReadyState(Connecting)
+	es.readyStateUpdates <- Connecting
 	err = es.connectOnce()
 	if err != nil {
 		es.Close()
@@ -72,7 +73,7 @@ func (es *eventSource) connect() (err error) {
 // reconnect to the stream several until the operation succeeds or the conditions
 // to retry no longer hold true.
 func (es *eventSource) reconnect() (err error) {
-	es.setReadyState(Connecting)
+	es.readyStateUpdates <- Connecting
 	for es.mustReconnect(err) {
 		time.Sleep(time.Duration(es.d.Retry()) * time.Millisecond)
 		err = es.connectOnce()
@@ -89,7 +90,7 @@ func (es *eventSource) connectOnce() (err error) {
 	if err != nil {
 		return
 	}
-	es.setReadyState(Open)
+	es.readyStateUpdates <- Open
 	es.d = NewDecoder(es.resp.Body)
 	go es.consume()
 	return
@@ -138,6 +139,11 @@ func (es *eventSource) consume() {
 // Clients will reconnect if the connection is closed;
 // a client can be told to stop reconnecting using the HTTP 204 No Content response code.
 func (es *eventSource) mustReconnect(err error) bool {
+	es.closedMux.RLock()
+	defer es.closedMux.RUnlock()
+	if es.closed == true {
+		return false
+	}
 	switch err {
 	case ErrContentType:
 		return false
@@ -156,21 +162,8 @@ func (es *eventSource) URL() string {
 }
 
 // Returns the event source connection state, either connecting, open or closed.
-func (es *eventSource) ReadyState() ReadyState {
-	es.readyStateMux.RLock()
-	defer es.readyStateMux.RUnlock()
-	return es.readyState
-}
-
-func (es *eventSource) setReadyState(newState ReadyState) {
-	es.readyStateMux.Lock()
-	defer es.readyStateMux.Unlock()
-
-	// Once the EventSource is closed, its ready state cannot change anymore.
-	if es.readyState == Closed {
-		return
-	}
-	es.readyState = newState
+func (es *eventSource) ReadyState() <-chan ReadyState {
+	return es.readyStateUpdates
 }
 
 // Returns the channel of events. MessageEvents will be queued in the channel as they
@@ -182,23 +175,17 @@ func (es *eventSource) MessageEvents() <-chan *MessageEvent {
 // Closes the event source.
 // After closing the event source, it cannot be reused again.
 func (es *eventSource) Close() {
-	if es.acquireClosingRight() {
-		if es.resp != nil {
-			es.resp.Body.Close()
-		}
-		close(es.out)
-		es.setReadyState(Closed)
+	es.closedMux.Lock()
+	defer es.closedMux.Unlock()
+	if es.closed == true {
+		return
 	}
-}
-
-// Acquires closing right by setting readyState to Closing if no one else
-// is attempting to close the EventSource.
-func (es *eventSource) acquireClosingRight() bool {
-	es.readyStateMux.Lock()
-	defer es.readyStateMux.Unlock()
-	if es.readyState == Closed || es.readyState == Closing {
-		return false
+	es.closed = true
+	es.readyStateUpdates <- Closing
+	if es.resp != nil {
+		es.resp.Body.Close()
 	}
-	es.readyState = Closing
-	return true
+	es.readyStateUpdates <- Closed
+	close(es.readyStateUpdates)
+	close(es.out)
 }
