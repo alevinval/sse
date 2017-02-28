@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mubit/sse"
-	"github.com/mubit/sse/tests"
+	"github.com/go-rfc/sse"
+	"github.com/go-rfc/sse/tests"
 	"github.com/stretchr/testify/assert"
 )
 

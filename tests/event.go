@@ -3,7 +3,7 @@ package tests
 import (
 	"fmt"
 
-	"github.com/mubit/sse"
+	"github.com/go-rfc/sse"
 )
 
 // NewEventWithPadding creates a raw slice of bytes with an event that does
