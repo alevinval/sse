@@ -13,12 +13,8 @@ import (
 const defaultRetry = 2500
 
 type (
-	// Decoder interface decodes events from a reader input
-	Decoder interface {
-		Decode() (ev *MessageEvent, err error)
-		Retry() (retry int)
-	}
-	decoder struct {
+	// Decoder decodes events from a reader input
+	Decoder struct {
 		lastEventID string
 		retry       int
 		scanner     *bufio.Scanner
@@ -26,12 +22,12 @@ type (
 	}
 )
 
-func (d *decoder) Retry() int {
+func (d *Decoder) Retry() int {
 	return d.retry
 }
 
 // Decode reads the input stream and interprets the events in it. Any error while reading is  returned.
-func (d *decoder) Decode() (*MessageEvent, error) {
+func (d *Decoder) Decode() (*MessageEvent, error) {
 	// Stores event data, which is filled after one or many lines from the reader
 	var name string
 	var eventSeen bool

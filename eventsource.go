@@ -38,7 +38,7 @@ type (
 	eventSource struct {
 		url         string
 		lastEventID string
-		d           Decoder
+		d           *Decoder
 		resp        *http.Response
 		out         chan *MessageEvent
 

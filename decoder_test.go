@@ -201,7 +201,7 @@ func BenchmarkDecode16kEvent(b *testing.B) {
 	runDecodingBenchmark(b, messageEventToString(ev))
 }
 
-func newDecoder(data string) Decoder {
+func newDecoder(data string) *Decoder {
 	reader := bytes.NewReader([]byte(data))
 	return NewDecoder(reader)
 }
