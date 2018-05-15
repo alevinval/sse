@@ -8,19 +8,8 @@ import (
 	"time"
 )
 
-type ReadyState uint16
-
 const (
 	AllowedContentType = "text/event-stream"
-
-	// Connecting while trying to establish connection with the stream.
-	Connecting ReadyState = iota - 1
-	// Open after connection is established with the server.
-	Open
-	// Closing after Close is invoked.
-	Closing
-	// Closed after the connection is closed.
-	Closed
 )
 
 var (
