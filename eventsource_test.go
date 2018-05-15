@@ -91,7 +91,7 @@ func (h *handler) Close() {
 }
 
 // Asserts an EventSource has Closed readyState after calling Close on it.
-func assertCloseClient(t *testing.T, es EventSource) bool {
+func assertCloseClient(t *testing.T, es *EventSource) bool {
 	es.Close()
 	maxWaits := 10
 	var waits int
@@ -103,7 +103,7 @@ func assertCloseClient(t *testing.T, es EventSource) bool {
 }
 
 // Asserts an EventSource has Open readyState.
-func assertIsOpen(t *testing.T, es EventSource, err error) bool {
+func assertIsOpen(t *testing.T, es *EventSource, err error) bool {
 	return assert.Nil(t, err) && assert.Equal(t, Open, es.ReadyState())
 }
 
