@@ -1,27 +1,22 @@
-package tests
+package sse
 
 import (
 	"fmt"
-
-	"github.com/go-rfc/sse"
 )
 
-// NewEventWithPadding creates a raw slice of bytes with an event that does
-// not exceed the specified size.
-func NewMessageEvent(lastEventID, name string, dataSize int) *sse.MessageEvent {
+func newMessageEvent(lastEventID, name string, dataSize int) *MessageEvent {
 	data := make([]byte, dataSize)
 	for i := range data {
 		data[i] = 'e'
 	}
-	return &sse.MessageEvent{LastEventID: lastEventID, Name: name, Data: string(data)}
+	return &MessageEvent{LastEventID: lastEventID, Name: name, Data: string(data)}
 }
 
-func NewRetryEvent(ms int) string {
+func newRetryEvent(ms int) string {
 	return fmt.Sprintf("retry: %d\n", ms)
 }
 
-// MessageEventToString encodes sse.MessageEvent into a string.
-func MessageEventToString(ev *sse.MessageEvent) string {
+func messageEventToString(ev *MessageEvent) string {
 	data := []byte{}
 	if ev.LastEventID != "" {
 		data = append(data, "id: "...)

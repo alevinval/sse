@@ -1,20 +1,12 @@
-package sse_test
+package sse
 
 import (
 	"bytes"
 	"io"
 	"testing"
 
-	"github.com/go-rfc/sse"
-	"github.com/go-rfc/sse/tests"
 	"github.com/stretchr/testify/assert"
 )
-
-// Extracts decoder from a string
-func newDecoder(data string) sse.Decoder {
-	reader := bytes.NewReader([]byte(data))
-	return sse.NewDecoder(reader)
-}
 
 func TestEOFIsReturned(t *testing.T) {
 	decoder := newDecoder("")
@@ -24,8 +16,8 @@ func TestEOFIsReturned(t *testing.T) {
 }
 
 func TestBigEventGrowsTheBuffer(t *testing.T) {
-	expectedEv := tests.NewMessageEvent("", "", 32000)
-	decoder := newDecoder(tests.MessageEventToString(expectedEv))
+	expectedEv := newMessageEvent("", "", 32000)
+	decoder := newDecoder(messageEventToString(expectedEv))
 
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
@@ -174,5 +166,52 @@ func TestPureLineFeedsWithCarriageReturn(t *testing.T) {
 	if assert.NoError(t, err) {
 		assert.Equal(t, "name", ev.Name)
 		assert.Equal(t, "some\n data", ev.Data)
+	}
+}
+
+func BenchmarkDecodeEmptyEvent(b *testing.B) {
+	runDecodingBenchmark(b, "data: \n\n")
+}
+
+func BenchmarkDecodeEmptyEventWithIgnoredLine(b *testing.B) {
+	runDecodingBenchmark(b, ":ignored line \n\ndata: \n\n")
+}
+
+func BenchmarkDecodeShortEvent(b *testing.B) {
+	runDecodingBenchmark(b, "data: short event\n\n")
+}
+
+func BenchmarkDecode1kEvent(b *testing.B) {
+	ev := newMessageEvent("", "", 1000)
+	runDecodingBenchmark(b, messageEventToString(ev))
+}
+
+func BenchmarkDecode4kEvent(b *testing.B) {
+	ev := newMessageEvent("", "", 4000)
+	runDecodingBenchmark(b, messageEventToString(ev))
+}
+
+func BenchmarkDecode8kEvent(b *testing.B) {
+	ev := newMessageEvent("", "", 8000)
+	runDecodingBenchmark(b, messageEventToString(ev))
+}
+
+func BenchmarkDecode16kEvent(b *testing.B) {
+	ev := newMessageEvent("", "", 16000)
+	runDecodingBenchmark(b, messageEventToString(ev))
+}
+
+func newDecoder(data string) Decoder {
+	reader := bytes.NewReader([]byte(data))
+	return NewDecoder(reader)
+}
+
+func runDecodingBenchmark(b *testing.B, data string) {
+	reader := bytes.NewReader([]byte(data))
+	b.ResetTimer()
+	decoder := NewDecoder(reader)
+	for i := 0; i < b.N; i++ {
+		decoder.Decode()
+		reader.Seek(0, 0)
 	}
 }

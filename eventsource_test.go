@@ -1,4 +1,4 @@
-package sse_test
+package sse
 
 import (
 	"net/http"
@@ -6,8 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-rfc/sse"
-	"github.com/go-rfc/sse/tests"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -46,7 +44,7 @@ func (h *handler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	rw.Header().Set("Connection", "keep-alive")
 	rw.Header().Set("Content-Type", h.ContentType)
 
-	// Assert sse.EventSource follows the spec and provides the Last-Event-ID header.
+	// Assert EventSource follows the spec and provides the Last-Event-ID header.
 	if !assert.Equal(h.t, h.lastEventID, req.Header.Get("Last-Event-ID"), "spec violation: eventsource reconnected without providing the last event id.") {
 		rw.WriteHeader(http.StatusNoContent)
 		return
@@ -74,13 +72,13 @@ func (h *handler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (h *handler) SendAndClose(ev *sse.MessageEvent) {
+func (h *handler) SendAndClose(ev *MessageEvent) {
 	h.Send(ev)
 	h.Close()
 }
 
-func (h *handler) Send(ev *sse.MessageEvent) {
-	h.SendString(tests.MessageEventToString(ev))
+func (h *handler) Send(ev *MessageEvent) {
+	h.SendString(messageEventToString(ev))
 	h.lastEventID = ev.LastEventID
 }
 
@@ -92,21 +90,21 @@ func (h *handler) Close() {
 	h.closer <- struct{}{}
 }
 
-// Asserts an sse.EventSource has Closed readyState after calling Close on it.
-func assertCloseClient(t *testing.T, es sse.EventSource) bool {
+// Asserts an EventSource has Closed readyState after calling Close on it.
+func assertCloseClient(t *testing.T, es EventSource) bool {
 	es.Close()
 	maxWaits := 10
 	var waits int
-	for es.ReadyState() == sse.Closing && waits < maxWaits {
+	for es.ReadyState() == Closing && waits < maxWaits {
 		time.Sleep(25 * time.Millisecond)
 		waits++
 	}
-	return assert.Equal(t, sse.Closed, es.ReadyState())
+	return assert.Equal(t, Closed, es.ReadyState())
 }
 
-// Asserts an sse.EventSource has Open readyState.
-func assertIsOpen(t *testing.T, es sse.EventSource, err error) bool {
-	return assert.Nil(t, err) && assert.Equal(t, sse.Open, es.ReadyState())
+// Asserts an EventSource has Open readyState.
+func assertIsOpen(t *testing.T, es EventSource, err error) bool {
+	return assert.Nil(t, err) && assert.Equal(t, Open, es.ReadyState())
 }
 
 func closeTestServer(s *httptest.Server, h *handler) {
@@ -121,14 +119,14 @@ func closeTestServer(s *httptest.Server, h *handler) {
 func TestEventSourceStates(t *testing.T) {
 	for _, test := range []struct {
 		stateNumber   byte
-		expectedState sse.ReadyState
+		expectedState ReadyState
 	}{
-		{0, sse.Connecting},
-		{1, sse.Open},
-		{2, sse.Closing},
-		{3, sse.Closed},
+		{0, Connecting},
+		{1, Open},
+		{2, Closing},
+		{3, Closed},
 	} {
-		assert.Equal(t, test.expectedState, sse.ReadyState(test.stateNumber))
+		assert.Equal(t, test.expectedState, ReadyState(test.stateNumber))
 	}
 }
 
@@ -137,11 +135,11 @@ func TestNewEventSourceWithInvalidContentType(t *testing.T) {
 	defer closeTestServer(s, handler)
 	handler.ContentType = textPlain
 
-	es, err := sse.NewEventSource(s.URL)
+	es, err := NewEventSource(s.URL)
 	if assert.Error(t, err) {
-		assert.Equal(t, sse.ErrContentType, err)
+		assert.Equal(t, ErrContentType, err)
 		assert.Equal(t, s.URL, es.URL())
-		assert.Equal(t, sse.Closed, es.ReadyState())
+		assert.Equal(t, Closed, es.ReadyState())
 		_, ok := <-es.MessageEvents()
 		assert.False(t, ok)
 	}
@@ -152,9 +150,9 @@ func TestNewEventSourceWithRightContentType(t *testing.T) {
 	s, handler := newServer(t)
 	defer closeTestServer(s, handler)
 
-	es, err := sse.NewEventSource(s.URL)
+	es, err := NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
-		expectedEv := tests.NewMessageEvent("", "", 128)
+		expectedEv := newMessageEvent("", "", 128)
 		go handler.SendAndClose(expectedEv)
 		ev, ok := <-es.MessageEvents()
 		if assert.True(t, ok) {
@@ -168,9 +166,9 @@ func TestNewEventSourceSendingEvent(t *testing.T) {
 	s, handler := newServer(t)
 	defer closeTestServer(s, handler)
 
-	es, err := sse.NewEventSource(s.URL)
+	es, err := NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
-		expectedEvent := tests.NewMessageEvent("", "", 1024)
+		expectedEvent := newMessageEvent("", "", 1024)
 		go handler.SendAndClose(expectedEvent)
 		ev, ok := <-es.MessageEvents()
 		if assert.True(t, ok) {
@@ -184,9 +182,9 @@ func TestEventSourceLastEventID(t *testing.T) {
 	s, handler := newServer(t)
 	defer closeTestServer(s, handler)
 
-	es, err := sse.NewEventSource(s.URL)
+	es, err := NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
-		expectedEv := tests.NewMessageEvent("123", "", 512)
+		expectedEv := newMessageEvent("123", "", 512)
 		go handler.Send(expectedEv)
 		ev, ok := <-es.MessageEvents()
 		if assert.True(t, ok) {
@@ -194,7 +192,7 @@ func TestEventSourceLastEventID(t *testing.T) {
 			assert.Equal(t, expectedEv.Data, ev.Data)
 		}
 
-		go handler.Send(tests.NewMessageEvent("", "", 32))
+		go handler.Send(newMessageEvent("", "", 32))
 		ev, ok = <-es.MessageEvents()
 		if assert.True(t, ok) {
 			assert.Equal(t, expectedEv.LastEventID, ev.LastEventID)
@@ -208,12 +206,12 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 	defer closeTestServer(s, handler)
 	handler.MaxRequests = 3
 
-	es, err := sse.NewEventSource(s.URL)
+	es, err := NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
 		// Big retry
-		handler.SendString(tests.NewRetryEvent(100))
+		handler.SendString(newRetryEvent(100))
 		handler.Close()
-		go handler.Send(tests.NewMessageEvent("", "", 128))
+		go handler.Send(newMessageEvent("", "", 128))
 		select {
 		case _, ok := <-es.MessageEvents():
 			assert.True(t, ok)
@@ -222,9 +220,9 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 		}
 
 		// Smaller retry
-		handler.SendString(tests.NewRetryEvent(1))
+		handler.SendString(newRetryEvent(1))
 		handler.Close()
-		go handler.Send(tests.NewMessageEvent("", "", 128))
+		go handler.Send(newMessageEvent("", "", 128))
 		select {
 		case _, ok := <-es.MessageEvents():
 			assert.True(t, ok)
@@ -239,12 +237,12 @@ func TestDropConnectionCannotReconnect(t *testing.T) {
 	s, handler := newServer(t)
 	defer closeTestServer(s, handler)
 
-	es, err := sse.NewEventSource(s.URL)
+	es, err := NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
 		handler.Close()
 		_, ok := <-es.MessageEvents()
 		if assert.False(t, ok) {
-			assert.Equal(t, sse.Closed, es.ReadyState())
+			assert.Equal(t, Closed, es.ReadyState())
 		}
 	}
 	assertCloseClient(t, es)
@@ -255,16 +253,16 @@ func TestDropConnectionCanReconnect(t *testing.T) {
 	defer closeTestServer(s, handler)
 	handler.MaxRequests = 2
 
-	es, err := sse.NewEventSource(s.URL)
+	es, err := NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
 		handler.Close()
 		go func() {
 			time.Sleep(25 * time.Millisecond)
-			handler.Send(tests.NewMessageEvent("", "", 128))
+			handler.Send(newMessageEvent("", "", 128))
 		}()
 		_, ok := <-es.MessageEvents()
 		if assert.True(t, ok) {
-			assert.Equal(t, sse.Open, es.ReadyState())
+			assert.Equal(t, Open, es.ReadyState())
 		}
 	}
 	assertCloseClient(t, es)
@@ -275,15 +273,15 @@ func TestLastEventIDHeaderOnReconnecting(t *testing.T) {
 	defer closeTestServer(s, handler)
 	handler.MaxRequests = 2
 
-	es, err := sse.NewEventSource(s.URL)
+	es, err := NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
-		handler.SendString(tests.NewRetryEvent(1))
-		expectedEv := tests.NewMessageEvent("abc", "", 128)
+		handler.SendString(newRetryEvent(1))
+		expectedEv := newMessageEvent("abc", "", 128)
 		go handler.SendAndClose(expectedEv)
 		_, ok := <-es.MessageEvents()
 		assert.True(t, ok)
 
-		go handler.Send(tests.NewMessageEvent("def", "", 128))
+		go handler.Send(newMessageEvent("def", "", 128))
 		_, ok = <-es.MessageEvents()
 		assert.True(t, ok)
 	}
