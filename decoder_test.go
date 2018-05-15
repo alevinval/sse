@@ -169,6 +169,13 @@ func TestPureLineFeedsWithCarriageReturn(t *testing.T) {
 	}
 }
 
+func TestDecodeRetry(t *testing.T) {
+	decoder := NewDecoder(bytes.NewReader([]byte("retry: 100\nretry: a\n")))
+	_, err := decoder.Decode()
+	assert.Equal(t, 100, decoder.Retry())
+	assert.Equal(t, io.EOF, err)
+}
+
 func BenchmarkDecodeEmptyEvent(b *testing.B) {
 	runDecodingBenchmark(b, "data: \n\n")
 }
