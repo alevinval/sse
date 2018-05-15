@@ -29,16 +29,10 @@ var (
 
 type (
 	// EventSource connects and processes events from an SSE stream.
-	EventSource interface {
-		URL() (url string)
-		ReadyState() (state ReadyState)
-		MessageEvents() (events <-chan *MessageEvent)
-		Close()
-	}
-	eventSource struct {
+	EventSource struct {
 		url         string
 		lastEventID string
-		d           Decoder
+		d           *Decoder
 		resp        *http.Response
 		out         chan *MessageEvent
 
@@ -49,18 +43,18 @@ type (
 )
 
 // NewEventSource constructs returns an EventSource that satisfies the HTML5 EventSource specification.
-func NewEventSource(url string) (EventSource, error) {
-	es := eventSource{
+func NewEventSource(url string) (*EventSource, error) {
+	es := &EventSource{
 		d:   nil,
 		url: url,
 		out: make(chan *MessageEvent),
 	}
-	return &es, es.connect()
+	return es, es.connect()
 }
 
 // connect does a connection attempt, if the operation fails, attempt reconnecting
 // according to the spec.
-func (es *eventSource) connect() (err error) {
+func (es *EventSource) connect() (err error) {
 	es.setReadyState(Connecting)
 	err = es.connectOnce()
 	if err != nil {
@@ -71,7 +65,7 @@ func (es *eventSource) connect() (err error) {
 
 // reconnect to the stream several until the operation succeeds or the conditions
 // to retry no longer hold true.
-func (es *eventSource) reconnect() (err error) {
+func (es *EventSource) reconnect() (err error) {
 	es.setReadyState(Connecting)
 	for es.mustReconnect(err) {
 		time.Sleep(time.Duration(es.d.Retry()) * time.Millisecond)
@@ -84,7 +78,7 @@ func (es *eventSource) reconnect() (err error) {
 }
 
 // Attempts to connect and updates internal status depending on the outcome.
-func (es *eventSource) connectOnce() (err error) {
+func (es *EventSource) connectOnce() (err error) {
 	es.resp, err = es.doHTTPConnect()
 	if err != nil {
 		return
@@ -95,7 +89,7 @@ func (es *eventSource) connectOnce() (err error) {
 	return
 }
 
-func (es *eventSource) doHTTPConnect() (*http.Response, error) {
+func (es *EventSource) doHTTPConnect() (*http.Response, error) {
 	// Prepare request
 	req, err := http.NewRequest("GET", es.url, nil)
 	if err != nil {
@@ -120,7 +114,7 @@ func (es *eventSource) doHTTPConnect() (*http.Response, error) {
 
 // Method consume() must be called once connect() succeeds.
 // It parses the input reader and assigns the event output channel accordingly.
-func (es *eventSource) consume() {
+func (es *EventSource) consume() {
 	for {
 		ev, err := es.d.Decode()
 		if err != nil {
@@ -137,7 +131,7 @@ func (es *eventSource) consume() {
 
 // Clients will reconnect if the connection is closed;
 // a client can be told to stop reconnecting using the HTTP 204 No Content response code.
-func (es *eventSource) mustReconnect(err error) bool {
+func (es *EventSource) mustReconnect(err error) bool {
 	switch err {
 	case ErrContentType:
 		return false
@@ -151,18 +145,18 @@ func (es *eventSource) mustReconnect(err error) bool {
 }
 
 // Returns the event source URL.
-func (es *eventSource) URL() string {
+func (es *EventSource) URL() string {
 	return es.url
 }
 
 // Returns the event source connection state, either connecting, open or closed.
-func (es *eventSource) ReadyState() ReadyState {
+func (es *EventSource) ReadyState() ReadyState {
 	es.readyStateMux.RLock()
 	defer es.readyStateMux.RUnlock()
 	return es.readyState
 }
 
-func (es *eventSource) setReadyState(newState ReadyState) {
+func (es *EventSource) setReadyState(newState ReadyState) {
 	es.readyStateMux.Lock()
 	defer es.readyStateMux.Unlock()
 
@@ -175,13 +169,13 @@ func (es *eventSource) setReadyState(newState ReadyState) {
 
 // Returns the channel of events. MessageEvents will be queued in the channel as they
 // are received.
-func (es *eventSource) MessageEvents() <-chan *MessageEvent {
+func (es *EventSource) MessageEvents() <-chan *MessageEvent {
 	return es.out
 }
 
 // Closes the event source.
 // After closing the event source, it cannot be reused again.
-func (es *eventSource) Close() {
+func (es *EventSource) Close() {
 	if es.acquireClosingRight() {
 		if es.resp != nil {
 			es.resp.Body.Close()
@@ -193,7 +187,7 @@ func (es *eventSource) Close() {
 
 // Acquires closing right by setting readyState to Closing if no one else
 // is attempting to close the EventSource.
-func (es *eventSource) acquireClosingRight() bool {
+func (es *EventSource) acquireClosingRight() bool {
 	es.readyStateMux.Lock()
 	defer es.readyStateMux.Unlock()
 	if es.readyState == Closed || es.readyState == Closing {
