@@ -1,6 +1,8 @@
-//go:generate stringer -type=ReadyState
 package sse
 
+//go:generate stringer -type=ReadyState
+
+// ReadyState indicates the state of the EventSource.
 type ReadyState uint16
 
 const (

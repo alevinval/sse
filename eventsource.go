@@ -9,15 +9,16 @@ import (
 )
 
 const (
-	AllowedContentType = "text/event-stream"
+	allowedContentType = "text/event-stream"
 )
 
 var (
+	// ErrContentType error indicates the content-type header is not accepted
 	ErrContentType = errors.New("eventsource: the content type of the stream is not allowed")
 )
 
 type (
-	// EventSource connects and processes events from an SSE stream.
+	// EventSource connects and processes events from an HTTP server-sent events stream.
 	EventSource struct {
 		url         string
 		lastEventID string
@@ -31,7 +32,7 @@ type (
 	}
 )
 
-// NewEventSource constructs returns an EventSource that satisfies the HTML5 EventSource specification.
+// NewEventSource connects and returns an EventSource.
 func NewEventSource(url string) (*EventSource, error) {
 	es := &EventSource{
 		d:   nil,
@@ -84,7 +85,7 @@ func (es *EventSource) doHTTPConnect() (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Accept", AllowedContentType)
+	req.Header.Set("Accept", allowedContentType)
 	req.Header.Set("Cache-Control", "no-store")
 	if es.lastEventID != "" {
 		req.Header.Set("Last-Event-ID", es.lastEventID)
@@ -95,7 +96,7 @@ func (es *EventSource) doHTTPConnect() (*http.Response, error) {
 	if err != nil {
 		return resp, err
 	}
-	if resp.Header.Get("Content-Type") != AllowedContentType {
+	if resp.Header.Get("Content-Type") != allowedContentType {
 		return resp, ErrContentType
 	}
 	return resp, nil
@@ -133,12 +134,12 @@ func (es *EventSource) mustReconnect(err error) bool {
 	return true
 }
 
-// Returns the event source URL.
+// URL returns the event source URL.
 func (es *EventSource) URL() string {
 	return es.url
 }
 
-// Returns the event source connection state, either connecting, open or closed.
+// ReadyState returns the state of the EventSource.
 func (es *EventSource) ReadyState() ReadyState {
 	es.readyStateMux.RLock()
 	defer es.readyStateMux.RUnlock()
@@ -156,14 +157,12 @@ func (es *EventSource) setReadyState(newState ReadyState) {
 	es.readyState = newState
 }
 
-// Returns the channel of events. MessageEvents will be queued in the channel as they
-// are received.
+// MessageEvents returns a channel of received events.
 func (es *EventSource) MessageEvents() <-chan *MessageEvent {
 	return es.out
 }
 
-// Closes the event source.
-// After closing the event source, it cannot be reused again.
+// Close the event source. Once closed, the event source cannot be re-used again.
 func (es *EventSource) Close() {
 	if es.acquireClosingRight() {
 		if es.resp != nil {

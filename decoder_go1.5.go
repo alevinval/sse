@@ -9,7 +9,7 @@ import (
 	"io"
 )
 
-// NewDecoder builds an SSE decoder with a growing buffer.
+// NewDecoder returns a Decoder with a growing buffer.
 // Lines are limited to bufio.MaxScanTokenSize - 1.
 func NewDecoder(in io.Reader) *Decoder {
 	d := &Decoder{scanner: bufio.NewScanner(in), data: new(bytes.Buffer), retry: defaultRetry}

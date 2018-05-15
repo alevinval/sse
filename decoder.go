@@ -13,7 +13,7 @@ import (
 const defaultRetry = 2500
 
 type (
-	// Decoder decodes events from a reader input
+	// Decoder accepts an io.Reader input and decodes message events from it.
 	Decoder struct {
 		lastEventID string
 		retry       int
@@ -22,11 +22,12 @@ type (
 	}
 )
 
+// Retry returns the amount of milliseconds to wait before attempting to reconnect to the event source.
 func (d *Decoder) Retry() int {
 	return d.retry
 }
 
-// Decode reads the input stream and interprets the events in it. Any error while reading is  returned.
+// Decode reads the input stream and parses events from it. Any error while reading is  returned.
 func (d *Decoder) Decode() (*MessageEvent, error) {
 	// Stores event data, which is filled after one or many lines from the reader
 	var name string

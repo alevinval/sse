@@ -16,14 +16,13 @@ func scanLinesCR(data []byte, atEOF bool) (advance int, token []byte, err error)
 				// We have to wait for the next byte to check if it is
 				// a \n
 				return 0, nil, nil
-			} else {
-				j := i
-				i++
-				if data[i] == '\n' {
-					i++
-				}
-				return i, data[:j], nil
 			}
+			j := i
+			i++
+			if data[i] == '\n' {
+				i++
+			}
+			return i, data[:j], nil
 		case '\n':
 			return i + 1, data[:i], nil
 		}
