@@ -115,7 +115,9 @@ func (es *EventSource) consume() {
 			return
 		}
 		es.lastEventID = ev.LastEventID
-		es.out <- ev
+		if es.ReadyState() == Open {
+			es.out <- ev
+		}
 	}
 }
 
