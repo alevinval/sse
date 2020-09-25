@@ -4,6 +4,16 @@ package sse
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[Connecting-0]
+	_ = x[Open-1]
+	_ = x[Closing-2]
+	_ = x[Closed-3]
+}
+
 const _ReadyState_name = "ConnectingOpenClosingClosed"
 
 var _ReadyState_index = [...]uint8{0, 10, 14, 21, 27}
