@@ -1,7 +1,6 @@
-package sse
+package testutils
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,14 +10,16 @@ import (
 
 const contentTypeEventStream = "text/event-stream"
 
-// retryEvent is used to represent a connection retry event
-type retryEvent struct {
-	delayInMs int
+// MessageEvent presents the payload being parsed from an EventSource.
+type MessageEvent struct {
+	LastEventID string
+	Name        string
+	Data        string
 }
 
-// testServerHandler used to emulate an http server that follows
+// TestServerHandler used to emulate an http server that follows
 // the SSE spec
-type testServerHandler struct {
+type TestServerHandler struct {
 	// Server instance of the test HTTP server
 	Server *httptest.Server
 
@@ -37,7 +38,7 @@ type testServerHandler struct {
 	closer      chan struct{}
 }
 
-func (h *testServerHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+func (h *TestServerHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	rw.Header().Set("Connection", "keep-alive")
 	rw.Header().Set("Content-Type", h.ContentType)
 
@@ -69,38 +70,38 @@ func (h *testServerHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request)
 	}
 }
 
-func (h *testServerHandler) SendAndClose(ev *MessageEvent) {
+func (h *TestServerHandler) SendAndClose(ev *MessageEvent) {
 	h.Send(ev)
 	h.CloseActiveRequest()
 }
 
-func (h *testServerHandler) Send(ev *MessageEvent) {
-	h.sendString(messageEventToString(ev))
+func (h *TestServerHandler) Send(ev *MessageEvent) {
+	h.sendString(MessageEventToString(ev))
 	h.lastEventID = ev.LastEventID
 }
 
-func (h *testServerHandler) SendRetry(ev *retryEvent) {
-	h.sendString(retryEventToString(ev))
+func (h *TestServerHandler) SendRetry(ev *RetryEvent) {
+	h.sendString(RetryEventToString(ev))
 }
 
 // CloseActiveRequest cancels the current request being served
-func (h *testServerHandler) CloseActiveRequest() {
+func (h *TestServerHandler) CloseActiveRequest() {
 	h.closer <- struct{}{}
 }
 
 // Close cancels both the active request being served and the underlying
 // test HTTP server
-func (h *testServerHandler) Close() {
+func (h *TestServerHandler) Close() {
 	go h.CloseActiveRequest()
 	h.Server.Close()
 }
 
-func (h *testServerHandler) sendString(data string) {
+func (h *TestServerHandler) sendString(data string) {
 	h.events <- data
 }
 
-func newTestServerHandler(t *testing.T) *testServerHandler {
-	handler := &testServerHandler{
+func NewDefaultTestServerHandler(t *testing.T) *TestServerHandler {
+	handler := &TestServerHandler{
 		URL:                  "",
 		ContentType:          contentTypeEventStream,
 		MaxRequestsToProcess: 1,
@@ -111,39 +112,4 @@ func newTestServerHandler(t *testing.T) *testServerHandler {
 	handler.Server = httptest.NewServer(handler)
 	handler.URL = handler.Server.URL
 	return handler
-}
-
-func newMessageEvent(lastEventID, name string, dataSize int) *MessageEvent {
-	data := make([]byte, dataSize)
-	for i := range data {
-		data[i] = 'e'
-	}
-	return &MessageEvent{LastEventID: lastEventID, Name: name, Data: string(data)}
-}
-
-func newRetryEvent(delayInMs int) *retryEvent {
-	return &retryEvent{delayInMs}
-}
-
-func messageEventToString(ev *MessageEvent) string {
-	msg := ""
-	if ev.LastEventID != "" {
-		msg = buildString("id: ", ev.LastEventID, "\n")
-	}
-	if ev.Name != "" {
-		msg = buildString(msg, "event: ", ev.Name, "\n")
-	}
-	return buildString(msg, "data: ", ev.Data, "\n\n")
-}
-
-func retryEventToString(ev *retryEvent) string {
-	return buildString("retry: ", fmt.Sprintf("%d", ev.delayInMs), "\n")
-}
-
-func buildString(fields ...string) string {
-	data := []byte{}
-	for _, field := range fields {
-		data = append(data, field...)
-	}
-	return string(data)
 }

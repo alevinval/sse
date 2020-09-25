@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-rfc/sse/internal/testutils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -26,7 +27,7 @@ func TestEventSourceStates(t *testing.T) {
 }
 
 func TestEventSourceConnectAndClose(t *testing.T) {
-	runTest(t, func(handler *testServerHandler) {
+	runTest(t, func(handler *testutils.TestServerHandler) {
 		url := handler.URL
 		es, err := NewEventSource(url)
 
@@ -39,7 +40,7 @@ func TestEventSourceConnectAndClose(t *testing.T) {
 }
 
 func TestEventSourceConnectAndCloseThenReceive(t *testing.T) {
-	runTest(t, func(handler *testServerHandler) {
+	runTest(t, func(handler *testutils.TestServerHandler) {
 		url := handler.URL
 		es, err := NewEventSource(url)
 
@@ -52,7 +53,7 @@ func TestEventSourceConnectAndCloseThenReceive(t *testing.T) {
 }
 
 func TestEventSourceWithInvalidContentType(t *testing.T) {
-	runTest(t, func(handler *testServerHandler) {
+	runTest(t, func(handler *testutils.TestServerHandler) {
 		handler.ContentType = contentTypeTextPlain
 		es, err := NewEventSource(handler.URL)
 
@@ -62,11 +63,11 @@ func TestEventSourceWithInvalidContentType(t *testing.T) {
 }
 
 func TestEventSourceConnectWriteAndReceiveShortEvent(t *testing.T) {
-	runTest(t, func(handler *testServerHandler) {
+	runTest(t, func(handler *testutils.TestServerHandler) {
 		es, err := NewEventSource(handler.URL)
 		assert.Nil(t, err)
 
-		expectedEv := newMessageEvent("", "", 128)
+		expectedEv := testutils.NewMessageEvent("", "", 128)
 		go handler.SendAndClose(expectedEv)
 
 		ev, ok := <-es.MessageEvents()
@@ -76,11 +77,11 @@ func TestEventSourceConnectWriteAndReceiveShortEvent(t *testing.T) {
 }
 
 func TestEventSourceConnectWriteAndReceiveLongEvent(t *testing.T) {
-	runTest(t, func(handler *testServerHandler) {
+	runTest(t, func(handler *testutils.TestServerHandler) {
 		es, err := NewEventSource(handler.URL)
 		assert.Nil(t, err)
 
-		expectedEv := newMessageEvent("", "", 128)
+		expectedEv := testutils.NewMessageEvent("", "", 128)
 		go handler.SendAndClose(expectedEv)
 
 		ev, ok := <-es.MessageEvents()
@@ -90,20 +91,20 @@ func TestEventSourceConnectWriteAndReceiveLongEvent(t *testing.T) {
 }
 
 func TestEventSourceLastEventID(t *testing.T) {
-	runTest(t, func(handler *testServerHandler) {
+	runTest(t, func(handler *testutils.TestServerHandler) {
 		es, err := NewEventSource(handler.URL)
 		assert.Nil(t, err)
 
 		lastEventID := "123"
-		expected := newMessageEvent(lastEventID, "", 512)
+		expected := testutils.NewMessageEvent(lastEventID, "", 512)
 		go handler.Send(expected)
 
 		actual, ok := <-es.MessageEvents()
 		assert.True(t, ok)
 		assert.Equal(t, lastEventID, actual.LastEventID)
-		assert.Equal(t, expected, actual)
+		assert.Equal(t, expected.Data, actual.Data)
 
-		go handler.Send(newMessageEvent("", "", 32))
+		go handler.Send(testutils.NewMessageEvent("", "", 32))
 
 		actual, ok = <-es.MessageEvents()
 		assert.Equal(t, lastEventID, actual.LastEventID)
@@ -111,15 +112,15 @@ func TestEventSourceLastEventID(t *testing.T) {
 }
 
 func TestEventSourceRetryIsRespected(t *testing.T) {
-	runTest(t, func(handler *testServerHandler) {
+	runTest(t, func(handler *testutils.TestServerHandler) {
 		handler.MaxRequestsToProcess = 3
 
 		es, err := NewEventSource(handler.URL)
 		assert.Nil(t, err)
 
-		handler.SendRetry(newRetryEvent(100))
+		handler.SendRetry(testutils.NewRetryEvent(100))
 		handler.CloseActiveRequest()
-		go handler.Send(newMessageEvent("", "", 128))
+		go handler.Send(testutils.NewMessageEvent("", "", 128))
 		select {
 		case _, ok := <-es.MessageEvents():
 			assert.True(t, ok)
@@ -128,9 +129,9 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 		}
 
 		// Smaller retry
-		handler.SendRetry(newRetryEvent(1))
+		handler.SendRetry(testutils.NewRetryEvent(1))
 		handler.CloseActiveRequest()
-		go handler.Send(newMessageEvent("", "", 128))
+		go handler.Send(testutils.NewMessageEvent("", "", 128))
 		select {
 		case _, ok := <-es.MessageEvents():
 			assert.True(t, ok)
@@ -141,7 +142,7 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 }
 
 func TestDropConnectionCannotReconnect(t *testing.T) {
-	runTest(t, func(handler *testServerHandler) {
+	runTest(t, func(handler *testutils.TestServerHandler) {
 		es, err := NewEventSource(handler.URL)
 		assert.Nil(t, err)
 
@@ -153,34 +154,34 @@ func TestDropConnectionCannotReconnect(t *testing.T) {
 }
 
 func TestDropConnectionCanReconnect(t *testing.T) {
-	runTest(t, func(handler *testServerHandler) {
+	runTest(t, func(handler *testutils.TestServerHandler) {
 		handler.MaxRequestsToProcess = 2
 		es, err := NewEventSource(handler.URL)
 		assert.Nil(t, err)
 
 		handler.CloseActiveRequest()
 		time.Sleep(25 * time.Millisecond)
-		go handler.Send(newMessageEvent("", "", 128))
+		go handler.Send(testutils.NewMessageEvent("", "", 128))
 		_, ok := <-es.MessageEvents()
 		assert.True(t, ok)
 	})
 }
 
 func TestLastEventIDHeaderOnReconnecting(t *testing.T) {
-	runTest(t, func(handler *testServerHandler) {
+	runTest(t, func(handler *testutils.TestServerHandler) {
 		handler.MaxRequestsToProcess = 2
 		es, err := NewEventSource(handler.URL)
 		assert.Nil(t, err)
 
-		handler.SendRetry(newRetryEvent(1))
+		handler.SendRetry(testutils.NewRetryEvent(1))
 
 		// After closing, we retry and can poll the second message
-		go handler.SendAndClose(newMessageEvent("first", "", 128))
+		go handler.SendAndClose(testutils.NewMessageEvent("first", "", 128))
 		_, ok := <-es.MessageEvents()
 		assert.True(t, ok)
 		assert.Equal(t, "first", es.lastEventID)
 
-		go handler.Send(newMessageEvent("second", "", 128))
+		go handler.Send(testutils.NewMessageEvent("second", "", 128))
 		_, ok = <-es.MessageEvents()
 		assert.True(t, ok)
 		assert.Equal(t, "second", es.lastEventID)
@@ -197,11 +198,11 @@ func timeout(d time.Duration) <-chan struct{} {
 	return ch
 }
 
-type testFn = func(*testServerHandler)
+type testFn = func(*testutils.TestServerHandler)
 
 func runTest(t *testing.T, fn testFn) {
 	t.Log("setting up test")
-	h := newTestServerHandler(t)
+	h := testutils.NewDefaultTestServerHandler(t)
 	defer h.Close()
 	fn(h)
 	t.Logf("tearing down test")
