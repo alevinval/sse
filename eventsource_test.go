@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	eventStream = "text/event-stream"
-	textPlain   = "text/plain; charset=utf-8"
+	contentTypeEventStream = "text/event-stream"
+	contentTypeTextPlain   = "text/plain; charset=utf-8"
 )
 
 type handler struct {
@@ -31,7 +31,7 @@ type handler struct {
 
 func newServer(t *testing.T) (*httptest.Server, *handler) {
 	handler := &handler{
-		ContentType: eventStream,
+		ContentType: contentTypeEventStream,
 		MaxRequests: 1,
 		t:           t,
 		events:      make(chan string),
@@ -78,16 +78,20 @@ func (h *handler) SendAndClose(ev *MessageEvent) {
 }
 
 func (h *handler) Send(ev *MessageEvent) {
-	h.SendString(messageEventToString(ev))
+	h.sendString(messageEventToString(ev))
 	h.lastEventID = ev.LastEventID
 }
 
-func (h *handler) SendString(data string) {
-	h.events <- data
+func (h *handler) SendRetry(ev *retryEvent) {
+	h.sendString(retryEventToString(ev))
 }
 
 func (h *handler) Close() {
 	h.closer <- struct{}{}
+}
+
+func (h *handler) sendString(data string) {
+	h.events <- data
 }
 
 // Asserts an EventSource has Closed readyState after calling Close on it.
@@ -133,7 +137,7 @@ func TestEventSourceStates(t *testing.T) {
 func TestNewEventSourceWithInvalidContentType(t *testing.T) {
 	s, handler := newServer(t)
 	defer closeTestServer(s, handler)
-	handler.ContentType = textPlain
+	handler.ContentType = contentTypeTextPlain
 
 	es, err := NewEventSource(s.URL)
 	if assert.Error(t, err) {
@@ -209,7 +213,7 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 	es, err := NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
 		// Big retry
-		handler.SendString(newRetryEvent(100))
+		handler.SendRetry(newRetryEvent(100))
 		handler.Close()
 		go handler.Send(newMessageEvent("", "", 128))
 		select {
@@ -220,7 +224,7 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 		}
 
 		// Smaller retry
-		handler.SendString(newRetryEvent(1))
+		handler.SendRetry(newRetryEvent(1))
 		handler.Close()
 		go handler.Send(newMessageEvent("", "", 128))
 		select {
@@ -275,7 +279,7 @@ func TestLastEventIDHeaderOnReconnecting(t *testing.T) {
 
 	es, err := NewEventSource(s.URL)
 	if assertIsOpen(t, es, err) {
-		handler.SendString(newRetryEvent(1))
+		handler.SendRetry(newRetryEvent(1))
 		expectedEv := newMessageEvent("abc", "", 128)
 		go handler.SendAndClose(expectedEv)
 		_, ok := <-es.MessageEvents()
