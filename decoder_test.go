@@ -5,7 +5,6 @@ import (
 	"io"
 	"testing"
 
-	"github.com/go-rfc/sse/internal/testutils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,8 +16,8 @@ func TestEOFIsReturned(t *testing.T) {
 }
 
 func TestBigEventGrowsTheBuffer(t *testing.T) {
-	expectedEv := testutils.NewMessageEvent("", "", 32000)
-	decoder := newDecoder(testutils.MessageEventToString(expectedEv))
+	expectedEv := newMessageEvent("", "", 32000)
+	decoder := newDecoder(messageEventToString(expectedEv))
 
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
@@ -190,23 +189,23 @@ func BenchmarkDecodeShortEvent(b *testing.B) {
 }
 
 func BenchmarkDecode1kEvent(b *testing.B) {
-	ev := testutils.NewMessageEvent("", "", 1000)
-	runDecodingBenchmark(b, testutils.MessageEventToString(ev))
+	ev := newMessageEvent("", "", 1000)
+	runDecodingBenchmark(b, messageEventToString(ev))
 }
 
 func BenchmarkDecode4kEvent(b *testing.B) {
-	ev := testutils.NewMessageEvent("", "", 4000)
-	runDecodingBenchmark(b, testutils.MessageEventToString(ev))
+	ev := newMessageEvent("", "", 4000)
+	runDecodingBenchmark(b, messageEventToString(ev))
 }
 
 func BenchmarkDecode8kEvent(b *testing.B) {
-	ev := testutils.NewMessageEvent("", "", 8000)
-	runDecodingBenchmark(b, testutils.MessageEventToString(ev))
+	ev := newMessageEvent("", "", 8000)
+	runDecodingBenchmark(b, messageEventToString(ev))
 }
 
 func BenchmarkDecode16kEvent(b *testing.B) {
-	ev := testutils.NewMessageEvent("", "", 16000)
-	runDecodingBenchmark(b, testutils.MessageEventToString(ev))
+	ev := newMessageEvent("", "", 16000)
+	runDecodingBenchmark(b, messageEventToString(ev))
 }
 
 func newDecoder(data string) *Decoder {

@@ -10,13 +10,6 @@ import (
 
 const contentTypeEventStream = "text/event-stream"
 
-// MessageEvent presents the payload being parsed from an EventSource.
-type MessageEvent struct {
-	LastEventID string
-	Name        string
-	Data        string
-}
-
 // TestServerHandler used to emulate an http server that follows
 // the SSE spec
 type TestServerHandler struct {
@@ -70,18 +63,22 @@ func (h *TestServerHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request)
 	}
 }
 
-func (h *TestServerHandler) SendAndClose(ev *MessageEvent) {
-	h.Send(ev)
+func (h *TestServerHandler) Send(data string) {
+	h.SendWithID(data, "")
+}
+
+func (h *TestServerHandler) SendWithID(data, lastEventID string) {
+	h.events <- data
+	h.lastEventID = lastEventID
+}
+
+func (h *TestServerHandler) SendAndClose(data string) {
+	h.SendAndCloseWithID(data, "")
+}
+
+func (h *TestServerHandler) SendAndCloseWithID(data string, lastEventID string) {
+	h.SendWithID(data, lastEventID)
 	h.CloseActiveRequest()
-}
-
-func (h *TestServerHandler) Send(ev *MessageEvent) {
-	h.sendString(MessageEventToString(ev))
-	h.lastEventID = ev.LastEventID
-}
-
-func (h *TestServerHandler) SendRetry(ev *RetryEvent) {
-	h.sendString(RetryEventToString(ev))
 }
 
 // CloseActiveRequest cancels the current request being served
@@ -94,10 +91,6 @@ func (h *TestServerHandler) CloseActiveRequest() {
 func (h *TestServerHandler) Close() {
 	go h.CloseActiveRequest()
 	h.Server.Close()
-}
-
-func (h *TestServerHandler) sendString(data string) {
-	h.events <- data
 }
 
 func NewDefaultTestServerHandler(t *testing.T) *TestServerHandler {
