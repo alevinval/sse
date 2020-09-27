@@ -6,10 +6,34 @@
 The package provides fast primitives to manipulate Server-Sent Events (SSE) as
 defined in the [HTML5 standard](https://html.spec.whatwg.org/multipage/comms.html).
 
-> **Note**
-> Types and interfaces exposed by the package are subjected to change until 
-the project stabilises and matures, which is expected to happen by 1.0.0 release.
-
-Install the package running `go get github.com/go-rfc/sse`
+Get the package with `go get github.com/go-rfc/sse`
 
 Check the [contributing guidelines](CONTRIBUTING.md) when submitting changes.
+
+## Usage
+
+```go
+es, err := sse.NewEventSource("http://foo.com/stocks/AAPL")
+
+for {
+    select {
+    case event := <- es.MessageEvents():
+        processEvent(event)
+    case <- es.ReadyState():
+        // You can hook custom logic on ReadyState changes
+        continue
+    }
+}
+```
+
+```go
+encoder := sse.NewEncoder(out)
+encoder.SetRetry(1000)
+
+event := &sse.MessageEvent{
+    LastEventID: "",
+    Name: "stock-update",
+    Data: "AAPL 30.09",
+}
+encoder.Write(event)
+```
