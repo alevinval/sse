@@ -12,6 +12,9 @@ const (
 	contentTypeTextPlain = "text/plain; charset=utf-8"
 )
 
+// currentState holds the most recent value of the event source
+var currentState ReadyState
+
 func TestEventSourceStates(t *testing.T) {
 	for _, test := range []struct {
 		stateNumber   byte
@@ -35,7 +38,7 @@ func TestEventSourceConnectAndClose(t *testing.T) {
 		assert.Equal(t, url, es.URL())
 
 		es.Close()
-		assert.Equal(t, Closed, es.ReadyState())
+		assertStates(t, []ReadyState{Connecting, Open, Closing, Closed}, es.ReadyState())
 	})
 }
 
@@ -58,7 +61,7 @@ func TestEventSourceWithInvalidContentType(t *testing.T) {
 		es, err := NewEventSource(handler.URL)
 
 		assert.Equal(t, ErrContentType, err)
-		assert.Equal(t, Closed, es.ReadyState())
+		assertStates(t, []ReadyState{Connecting, Closing, Closed}, es.ReadyState())
 	})
 }
 
@@ -137,10 +140,16 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 		case <-timeout(10 * time.Millisecond):
 			assert.Fail(t, "event source did not reconnect within the allowed time.")
 		}
+
+		assertStates(
+			t,
+			[]ReadyState{Connecting, Open, Connecting, Open, Connecting, Open},
+			es.ReadyState(),
+		)
 	})
 }
 
-func TestDropConnectionCannotReconnect(t *testing.T) {
+func TestEventSourceDropConnectionCannotReconnect(t *testing.T) {
 	runTest(t, func(handler *testutils.TestServerHandler) {
 		es, err := NewEventSource(handler.URL)
 		assert.Nil(t, err)
@@ -149,10 +158,16 @@ func TestDropConnectionCannotReconnect(t *testing.T) {
 
 		_, ok := <-es.MessageEvents()
 		assert.False(t, ok)
+		assertStates(
+			t,
+			[]ReadyState{Connecting, Open, Connecting, Open, Closing, Closed},
+			es.ReadyState(),
+		)
+
 	})
 }
 
-func TestDropConnectionCanReconnect(t *testing.T) {
+func TestEventSourceDropConnectionCanReconnect(t *testing.T) {
 	runTest(t, func(handler *testutils.TestServerHandler) {
 		handler.MaxRequestsToProcess = 2
 		es, err := NewEventSource(handler.URL)
@@ -163,10 +178,15 @@ func TestDropConnectionCanReconnect(t *testing.T) {
 		go handler.Send(newMessageEventString("", "", 128))
 		_, ok := <-es.MessageEvents()
 		assert.True(t, ok)
+		assertStates(
+			t,
+			[]ReadyState{Connecting, Open, Connecting, Open},
+			es.ReadyState(),
+		)
 	})
 }
 
-func TestLastEventIDHeaderOnReconnecting(t *testing.T) {
+func TestEventSourceLastEventIDHeaderOnReconnecting(t *testing.T) {
 	runTest(t, func(handler *testutils.TestServerHandler) {
 		handler.MaxRequestsToProcess = 2
 		es, err := NewEventSource(handler.URL)
@@ -194,6 +214,25 @@ func timeout(d time.Duration) <-chan struct{} {
 		ch <- struct{}{}
 	}()
 	return ch
+}
+
+func assertStates(t *testing.T, expected []ReadyState, states <-chan ReadyState) {
+	actual := collectStates(states)
+	assert.Equal(t, expected, actual)
+}
+
+func collectStates(states <-chan ReadyState) []ReadyState {
+	list := []ReadyState{}
+	poll := true
+	for poll {
+		select {
+		case readyState := <-states:
+			list = append(list, readyState)
+		case <-timeout(250 * time.Millisecond):
+			poll = false
+		}
+	}
+	return list
 }
 
 type testFn = func(*testutils.TestServerHandler)
