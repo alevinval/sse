@@ -4,5 +4,9 @@ package sse
 // with it. Useful to notify changes and why they happened.
 type Status struct {
 	ReadyState ReadyState
-	Error      error
+	Err        error
+}
+
+func (s *Status) Error() string {
+	return s.Err.Error()
 }
