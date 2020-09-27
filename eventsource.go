@@ -24,20 +24,21 @@ type (
 		lastEventID string
 		d           *Decoder
 		resp        *http.Response
+		closed      bool
+		closedMutex *sync.RWMutex
 		out         chan *MessageEvent
-
-		// Status of the event stream.
-		readyState    ReadyState
-		readyStateMux sync.RWMutex
+		readyState  chan Status
 	}
 )
 
 // NewEventSource connects and returns an EventSource.
 func NewEventSource(url string) (*EventSource, error) {
 	es := &EventSource{
-		d:   nil,
-		url: url,
-		out: make(chan *MessageEvent),
+		d:           nil,
+		url:         url,
+		out:         make(chan *MessageEvent),
+		readyState:  make(chan Status, 128),
+		closedMutex: new(sync.RWMutex),
 	}
 	return es, es.connect()
 }
@@ -45,10 +46,9 @@ func NewEventSource(url string) (*EventSource, error) {
 // connect does a connection attempt, if the operation fails, attempt reconnecting
 // according to the spec.
 func (es *EventSource) connect() (err error) {
-	es.setReadyState(Connecting)
 	err = es.connectOnce()
 	if err != nil {
-		es.Close()
+		es.Close(err)
 	}
 	return
 }
@@ -56,24 +56,24 @@ func (es *EventSource) connect() (err error) {
 // reconnect to the stream several until the operation succeeds or the conditions
 // to retry no longer hold true.
 func (es *EventSource) reconnect() (err error) {
-	es.setReadyState(Connecting)
 	for es.mustReconnect(err) {
 		time.Sleep(time.Duration(es.d.Retry()) * time.Millisecond)
 		err = es.connectOnce()
 	}
 	if err != nil {
-		es.Close()
+		es.Close(err)
 	}
 	return
 }
 
 // Attempts to connect and updates internal status depending on the outcome.
 func (es *EventSource) connectOnce() (err error) {
+	es.readyState <- Status{Connecting, nil}
 	es.resp, err = es.doHTTPConnect()
 	if err != nil {
 		return
 	}
-	es.setReadyState(Open)
+	es.readyState <- Status{Open, nil}
 	es.d = NewDecoder(es.resp.Body)
 	go es.consume()
 	return
@@ -109,9 +109,10 @@ func (es *EventSource) consume() {
 		ev, err := es.d.Decode()
 		if err != nil {
 			if es.mustReconnect(err) {
-				err = es.reconnect()
+				es.reconnect()
+			} else {
+				es.Close(err)
 			}
-			es.Close()
 			return
 		}
 		es.lastEventID = ev.LastEventID
@@ -122,6 +123,11 @@ func (es *EventSource) consume() {
 // Clients will reconnect if the connection is closed;
 // a client can be told to stop reconnecting using the HTTP 204 No Content response code.
 func (es *EventSource) mustReconnect(err error) bool {
+	es.closedMutex.RLock()
+	defer es.closedMutex.RUnlock()
+	if es.closed {
+		return false
+	}
 	switch err {
 	case ErrContentType:
 		return false
@@ -139,48 +145,32 @@ func (es *EventSource) URL() string {
 	return es.url
 }
 
-// ReadyState returns the state of the EventSource.
-func (es *EventSource) ReadyState() ReadyState {
-	es.readyStateMux.RLock()
-	defer es.readyStateMux.RUnlock()
-	return es.readyState
-}
-
-func (es *EventSource) setReadyState(newState ReadyState) {
-	es.readyStateMux.Lock()
-	defer es.readyStateMux.Unlock()
-
-	// Once the EventSource is closed, its ready state cannot change anymore.
-	if es.readyState == Closed {
-		return
-	}
-	es.readyState = newState
-}
-
 // MessageEvents returns a channel of received events.
 func (es *EventSource) MessageEvents() <-chan *MessageEvent {
 	return es.out
 }
 
-// Close the event source. Once closed, the event source cannot be re-used again.
-func (es *EventSource) Close() {
-	if es.acquireClosingRight() {
-		if es.resp != nil {
-			es.resp.Body.Close()
-		}
-		close(es.out)
-		es.setReadyState(Closed)
-	}
+// ReadyState exposes a channel with updates on the ready state
+// of the event source.
+// It must be consumed together with MessageEvents.
+func (es *EventSource) ReadyState() <-chan Status {
+	return es.readyState
 }
 
-// Acquires closing right by setting readyState to Closing if no one else
-// is attempting to close the EventSource.
-func (es *EventSource) acquireClosingRight() bool {
-	es.readyStateMux.Lock()
-	defer es.readyStateMux.Unlock()
-	if es.readyState == Closed || es.readyState == Closing {
-		return false
+// Close the event source. Once closed, the event source cannot be re-used again.
+func (es *EventSource) Close(err error) {
+	es.closedMutex.Lock()
+	defer es.closedMutex.Unlock()
+	if es.closed {
+		return
 	}
-	es.readyState = Closing
-	return true
+	es.readyState <- Status{Closing, err}
+	es.closed = true
+
+	if es.resp != nil {
+		es.resp.Body.Close()
+	}
+
+	close(es.out)
+	es.readyState <- Status{Closed, err}
 }
