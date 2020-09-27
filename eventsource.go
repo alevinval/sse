@@ -27,7 +27,7 @@ type (
 		closed      bool
 		closedMutex *sync.RWMutex
 		out         chan *MessageEvent
-		readyState  chan ReadyState
+		readyState  chan Status
 	}
 )
 
@@ -37,7 +37,7 @@ func NewEventSource(url string) (*EventSource, error) {
 		d:           nil,
 		url:         url,
 		out:         make(chan *MessageEvent),
-		readyState:  make(chan ReadyState, 128),
+		readyState:  make(chan Status, 128),
 		closedMutex: new(sync.RWMutex),
 	}
 	return es, es.connect()
@@ -48,7 +48,7 @@ func NewEventSource(url string) (*EventSource, error) {
 func (es *EventSource) connect() (err error) {
 	err = es.connectOnce()
 	if err != nil {
-		es.Close()
+		es.Close(err)
 	}
 	return
 }
@@ -61,19 +61,19 @@ func (es *EventSource) reconnect() (err error) {
 		err = es.connectOnce()
 	}
 	if err != nil {
-		es.Close()
+		es.Close(err)
 	}
 	return
 }
 
 // Attempts to connect and updates internal status depending on the outcome.
 func (es *EventSource) connectOnce() (err error) {
-	es.readyState <- Connecting
+	es.readyState <- Status{Connecting, nil}
 	es.resp, err = es.doHTTPConnect()
 	if err != nil {
 		return
 	}
-	es.readyState <- Open
+	es.readyState <- Status{Open, nil}
 	es.d = NewDecoder(es.resp.Body)
 	go es.consume()
 	return
@@ -111,7 +111,7 @@ func (es *EventSource) consume() {
 			if es.mustReconnect(err) {
 				es.reconnect()
 			} else {
-				es.Close()
+				es.Close(err)
 			}
 			return
 		}
@@ -153,18 +153,18 @@ func (es *EventSource) MessageEvents() <-chan *MessageEvent {
 // ReadyState exposes a channel with updates on the ready state
 // of the event source.
 // It must be consumed together with MessageEvents.
-func (es *EventSource) ReadyState() <-chan ReadyState {
+func (es *EventSource) ReadyState() <-chan Status {
 	return es.readyState
 }
 
 // Close the event source. Once closed, the event source cannot be re-used again.
-func (es *EventSource) Close() {
+func (es *EventSource) Close(err error) {
 	es.closedMutex.Lock()
 	defer es.closedMutex.Unlock()
 	if es.closed {
 		return
 	}
-	es.readyState <- Closing
+	es.readyState <- Status{Closing, err}
 	es.closed = true
 
 	if es.resp != nil {
@@ -172,5 +172,5 @@ func (es *EventSource) Close() {
 	}
 
 	close(es.out)
-	es.readyState <- Closed
+	es.readyState <- Status{Closed, err}
 }

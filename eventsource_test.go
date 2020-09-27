@@ -37,7 +37,7 @@ func TestEventSourceConnectAndClose(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, url, es.URL())
 
-		es.Close()
+		es.Close(nil)
 		assertStates(t, []ReadyState{Connecting, Open, Closing, Closed}, es.ReadyState())
 	})
 }
@@ -48,7 +48,7 @@ func TestEventSourceConnectAndCloseThenReceive(t *testing.T) {
 		es, err := NewEventSource(url)
 
 		assert.Nil(t, err)
-		es.Close()
+		es.Close(nil)
 
 		_, ok := <-es.MessageEvents()
 		assert.False(t, ok)
@@ -216,18 +216,18 @@ func timeout(d time.Duration) <-chan struct{} {
 	return ch
 }
 
-func assertStates(t *testing.T, expected []ReadyState, states <-chan ReadyState) {
+func assertStates(t *testing.T, expected []ReadyState, states <-chan Status) {
 	actual := collectStates(states)
 	assert.Equal(t, expected, actual)
 }
 
-func collectStates(states <-chan ReadyState) []ReadyState {
+func collectStates(states <-chan Status) []ReadyState {
 	list := []ReadyState{}
 	poll := true
 	for poll {
 		select {
-		case readyState := <-states:
-			list = append(list, readyState)
+		case status := <-states:
+			list = append(list, status.ReadyState)
 		case <-timeout(250 * time.Millisecond):
 			poll = false
 		}
