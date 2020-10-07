@@ -127,7 +127,7 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 		select {
 		case _, ok := <-es.MessageEvents():
 			assert.True(t, ok)
-		case <-timeout(125 * time.Millisecond):
+		case <-time.After(125 * time.Millisecond):
 			assert.Fail(t, "event source did not reconnect within the allowed time.")
 		}
 
@@ -137,7 +137,7 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 		select {
 		case _, ok := <-es.MessageEvents():
 			assert.True(t, ok)
-		case <-timeout(10 * time.Millisecond):
+		case <-time.After(10 * time.Millisecond):
 			assert.Fail(t, "event source did not reconnect within the allowed time.")
 		}
 
@@ -207,15 +207,6 @@ func TestEventSourceLastEventIDHeaderOnReconnecting(t *testing.T) {
 	})
 }
 
-func timeout(d time.Duration) <-chan struct{} {
-	ch := make(chan struct{})
-	go func() {
-		time.Sleep(d)
-		ch <- struct{}{}
-	}()
-	return ch
-}
-
 func assertStates(t *testing.T, expected []ReadyState, states <-chan Status) {
 	actual := collectStates(states)
 	assert.Equal(t, expected, actual)
@@ -228,7 +219,7 @@ func collectStates(states <-chan Status) []ReadyState {
 		select {
 		case status := <-states:
 			list = append(list, status.ReadyState)
-		case <-timeout(250 * time.Millisecond):
+		case <-time.After(250 * time.Millisecond):
 			poll = false
 		}
 	}
