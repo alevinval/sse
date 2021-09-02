@@ -15,24 +15,31 @@ const (
 var (
 	// ErrContentType error indicates the content-type header is not accepted
 	ErrContentType = errors.New("eventsource: the content type of the stream is not allowed")
+
+	// ErrUnauthorized error indicates an authorization error of the connection request
+	ErrUnauthorized = errors.New("eventsource: connection is unauthorized")
 )
+
+// Function for modifying the http connection request.
+type RequestModifier func(r *http.Request)
 
 type (
 	// EventSource connects and processes events from an HTTP server-sent events stream.
 	EventSource struct {
-		url         string
-		lastEventID string
-		d           *Decoder
-		resp        *http.Response
-		closed      bool
-		closedMutex *sync.RWMutex
-		out         chan *MessageEvent
-		readyState  chan Status
+		url              string
+		requestModifiers []RequestModifier
+		lastEventID      string
+		d                *Decoder
+		resp             *http.Response
+		closed           bool
+		closedMutex      *sync.RWMutex
+		out              chan *MessageEvent
+		readyState       chan Status
 	}
 )
 
 // NewEventSource connects and returns an EventSource.
-func NewEventSource(url string) (*EventSource, error) {
+func NewEventSource(url string, requestModifiers ...RequestModifier) (*EventSource, error) {
 	es := &EventSource{
 		d:           nil,
 		url:         url,
@@ -40,6 +47,7 @@ func NewEventSource(url string) (*EventSource, error) {
 		readyState:  make(chan Status, 128),
 		closedMutex: new(sync.RWMutex),
 	}
+	es.requestModifiers = append(es.requestModifiers, requestModifiers...)
 	return es, es.connect()
 }
 
@@ -85,6 +93,12 @@ func (es *EventSource) doHTTPConnect() (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// apply request modifiers
+	for _, requestModifier := range es.requestModifiers {
+		requestModifier(req)
+	}
+
 	req.Header.Set("Accept", allowedContentType)
 	req.Header.Set("Cache-Control", "no-store")
 	if es.lastEventID != "" {
@@ -96,10 +110,27 @@ func (es *EventSource) doHTTPConnect() (*http.Response, error) {
 	if err != nil {
 		return resp, err
 	}
+
+	if resp.StatusCode == 401 {
+		return resp, ErrUnauthorized
+	}
+
 	if resp.Header.Get("Content-Type") != allowedContentType {
 		return resp, ErrContentType
 	}
 	return resp, nil
+}
+
+func WithBasicAuth(username, password string) RequestModifier {
+	return func(r *http.Request) {
+		r.SetBasicAuth(username, password)
+	}
+}
+
+func WithBearerTokenAuth(token string) RequestModifier {
+	return func(r *http.Request) {
+		r.Header.Add("Authorization", "Bearer "+token)
+	}
 }
 
 // Method consume() must be called once connect() succeeds.

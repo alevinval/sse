@@ -25,6 +25,12 @@ type TestServerHandler struct {
 	// MaxRequestsToProcess before closing the stream.
 	MaxRequestsToProcess int
 
+	// Server requires basic authorization if username is set
+	BasicAuth struct {
+		Username string
+		Password string
+	}
+
 	t           *testing.T
 	lastEventID string
 	events      chan string
@@ -32,6 +38,21 @@ type TestServerHandler struct {
 }
 
 func (h *TestServerHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+
+	// verify basic auth
+	if len(h.BasicAuth.Username) > 0 {
+		username, password, ok := req.BasicAuth()
+		if !ok {
+			http.Error(rw, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		if h.BasicAuth.Username != username || h.BasicAuth.Password != password {
+			http.Error(rw, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+	}
+
 	rw.Header().Set("Connection", "keep-alive")
 	rw.Header().Set("Content-Type", h.ContentType)
 

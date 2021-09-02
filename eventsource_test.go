@@ -10,6 +10,8 @@ import (
 
 const (
 	contentTypeTextPlain = "text/plain; charset=utf-8"
+	basicAuthUsername    = "foo"
+	basicAuthPassword    = "bar"
 )
 
 // currentState holds the most recent value of the event source
@@ -204,6 +206,38 @@ func TestEventSourceLastEventIDHeaderOnReconnecting(t *testing.T) {
 		_, ok = <-es.MessageEvents()
 		assert.True(t, ok)
 		assert.Equal(t, "second", es.lastEventID)
+	})
+}
+
+func TestEventSourceWithBasicAuth(t *testing.T) {
+	runTest(t, func(handler *testutils.TestServerHandler) {
+		handler.BasicAuth.Username = basicAuthUsername
+		handler.BasicAuth.Password = basicAuthPassword
+
+		url := handler.URL
+		es, err := NewEventSource(url, WithBasicAuth("foo", "bar"))
+
+		assert.Nil(t, err)
+		es.Close(nil)
+
+		_, ok := <-es.MessageEvents()
+		assert.False(t, ok)
+	})
+}
+
+func TestEventSourceWithBasicAuthInvalidPassword(t *testing.T) {
+	runTest(t, func(handler *testutils.TestServerHandler) {
+		handler.BasicAuth.Username = basicAuthUsername
+		handler.BasicAuth.Password = basicAuthPassword
+
+		url := handler.URL
+		es, err := NewEventSource(url, WithBasicAuth("foo", ""))
+
+		assert.Equal(t, ErrUnauthorized, err)
+		es.Close(nil)
+
+		_, ok := <-es.MessageEvents()
+		assert.False(t, ok)
 	})
 }
 
