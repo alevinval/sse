@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -115,7 +116,7 @@ func (es *EventSource) doHTTPConnect() (*http.Response, error) {
 		return resp, ErrUnauthorized
 	}
 
-	if resp.Header.Get("Content-Type") != allowedContentType {
+	if !strings.Contains(resp.Header.Get("Content-Type"), allowedContentType) {
 		return resp, ErrContentType
 	}
 	return resp, nil
