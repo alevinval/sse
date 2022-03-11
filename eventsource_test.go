@@ -260,10 +260,9 @@ func collectStates(states <-chan Status) []ReadyState {
 
 type testFn = func(*testutils.TestServerHandler)
 
-func runTest(t *testing.T, fn testFn) {
-	t.Log("setting up test")
-	h := testutils.NewDefaultTestServerHandler(t)
-	defer h.Close()
-	fn(h)
-	t.Logf("tearing down test")
+func runTest(t *testing.T, test testFn) {
+	server := testutils.NewDefaultTestServerHandler(t)
+	defer server.Close()
+
+	test(server)
 }

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const contentTypeEventStream = "text/event-stream"
+const contentTypeEventStream = "text/event-stream; charset=utf-8"
 
 // TestServerHandler used to emulate an http server that follows
 // the SSE spec

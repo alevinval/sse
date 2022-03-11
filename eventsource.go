@@ -3,8 +3,8 @@ package sse
 import (
 	"errors"
 	"io"
+	"mime"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 )
@@ -115,7 +115,8 @@ func (es *EventSource) doHTTPConnect() (*http.Response, error) {
 		return resp, ErrUnauthorized
 	}
 
-	if !strings.Contains(resp.Header.Get("Content-Type"), allowedContentType) {
+	mediaType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if err != nil || mediaType != allowedContentType {
 		return resp, ErrContentType
 	}
 	return resp, nil
