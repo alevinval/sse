@@ -14,9 +14,6 @@ const (
 	basicAuthPassword    = "bar"
 )
 
-// currentState holds the most recent value of the event source
-var currentState ReadyState
-
 func TestEventSourceStates(t *testing.T) {
 	for _, test := range []struct {
 		stateNumber   byte
@@ -113,6 +110,7 @@ func TestEventSourceLastEventID(t *testing.T) {
 		go handler.SendWithID(messageEventToString(ev), ev.LastEventID)
 
 		actual, ok = <-es.MessageEvents()
+		assert.True(t, ok)
 		assert.Equal(t, lastEventID, actual.LastEventID)
 	})
 }

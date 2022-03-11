@@ -7,9 +7,8 @@ import (
 )
 
 type Encoder struct {
-	lastEventID string
-	buf         *bytes.Buffer
-	out         io.Writer
+	buf *bytes.Buffer
+	out io.Writer
 }
 
 func NewEncoder(out io.Writer) *Encoder {
