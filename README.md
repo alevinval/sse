@@ -26,6 +26,18 @@ for {
 }
 ```
 
+The library includes `WithBasicAuth` and `WithAuthorizationBearer` modifiers.
+
+Create your own `RequestModifier` in case you need further manipulation of the
+underlying HTTP request.
+
+```go
+sse.NewEventSource("http://foo.com/stocks/AAPL", sse.WithBasicAuth("user", "password"))
+sse.NewEventSource("http://foo.com/stocks/AAPL", sse.WithAuthorizationBearer("token"))
+```
+
+On the server side, use the encoder to emit the events.
+
 ```go
 encoder := sse.NewEncoder(out)
 encoder.SetRetry(1000)
