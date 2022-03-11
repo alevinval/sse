@@ -21,9 +21,6 @@ var (
 	ErrUnauthorized = errors.New("eventsource: connection is unauthorized")
 )
 
-// Function for modifying the http connection request.
-type RequestModifier func(r *http.Request)
-
 type (
 	// EventSource connects and processes events from an HTTP server-sent events stream.
 	EventSource struct {
@@ -40,6 +37,8 @@ type (
 )
 
 // NewEventSource connects and returns an EventSource.
+// Supports request modifiers in case you need to update HTTP headers
+// of the underlying request.
 func NewEventSource(url string, requestModifiers ...RequestModifier) (*EventSource, error) {
 	es := &EventSource{
 		d:           nil,
@@ -120,18 +119,6 @@ func (es *EventSource) doHTTPConnect() (*http.Response, error) {
 		return resp, ErrContentType
 	}
 	return resp, nil
-}
-
-func WithBasicAuth(username, password string) RequestModifier {
-	return func(r *http.Request) {
-		r.SetBasicAuth(username, password)
-	}
-}
-
-func WithBearerTokenAuth(token string) RequestModifier {
-	return func(r *http.Request) {
-		r.Header.Add("Authorization", "Bearer "+token)
-	}
 }
 
 // Method consume() must be called once connect() succeeds.
