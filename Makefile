@@ -8,6 +8,10 @@ cover:
 	go test -count=1 -cover -coverprofile coverage.out ./...
 	go tool cover -html coverage.out
 
+.PHONY: bench
+bench:
+	go test -bench=. ./...
+
 .PHONY: mod-update
 mod-update:
 	go get -u ./...
