@@ -1,4 +1,4 @@
-package sse
+package decoder
 
 import (
 	"bufio"
@@ -6,6 +6,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
+
+	"github.com/go-rfc/sse/pkg/base"
 )
 
 // Default retry time in milliseconds.
@@ -22,13 +24,30 @@ type (
 	}
 )
 
+// New returns a Decoder with a growing buffer.
+// Lines are limited to bufio.MaxScanTokenSize - 1.
+func New(in io.Reader) *Decoder {
+	return NewSize(in, 0)
+}
+
+// NewSize returns a Decoder with a fixed buffer size.
+// This constructor is only available on go >= 1.6
+func NewSize(in io.Reader, bufferSize int) *Decoder {
+	d := &Decoder{scanner: bufio.NewScanner(in), data: new(bytes.Buffer), retry: defaultRetry}
+	if bufferSize > 0 {
+		d.scanner.Buffer(make([]byte, bufferSize), bufferSize)
+	}
+	d.scanner.Split(scanLinesCR) // See scanlines.go
+	return d
+}
+
 // Retry returns the amount of milliseconds to wait before attempting to reconnect to the event source.
 func (d *Decoder) Retry() int {
 	return d.retry
 }
 
 // Decode reads the input stream and parses events from it. Any error while reading is  returned.
-func (d *Decoder) Decode() (*MessageEvent, error) {
+func (d *Decoder) Decode() (*base.MessageEvent, error) {
 	// Stores event data, which is filled after one or many lines from the reader
 	var name string
 	var eventSeen bool
@@ -50,7 +69,7 @@ func (d *Decoder) Decode() (*MessageEvent, error) {
 				// the name of any event as defined in the DOM Events spec.
 				// Decoder does not perform this check, hence it could yield
 				// events that would not be valid in a browser.
-				return &MessageEvent{d.lastEventID, name, data.String()}, nil
+				return &base.MessageEvent{LastEventID: d.lastEventID, Name: name, Data: data.String()}, nil
 			}
 			continue
 		}

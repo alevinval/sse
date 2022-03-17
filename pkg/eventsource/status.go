@@ -1,4 +1,4 @@
-package sse
+package eventsource
 
 // Status groups together a ready state and possible error associated
 // with it. Useful to notify changes and why they happened.

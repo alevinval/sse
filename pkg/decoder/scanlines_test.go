@@ -1,4 +1,4 @@
-package sse
+package decoder
 
 import (
 	"testing"

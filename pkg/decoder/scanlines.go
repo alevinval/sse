@@ -1,4 +1,4 @@
-package sse
+package decoder
 
 // scanLinesCRLF is a variation of bufio.ScanLines that also recognizes
 // just CR as EOL (as specified in the EventSource spec)

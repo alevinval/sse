@@ -1,10 +1,11 @@
-package sse
+package decoder
 
 import (
 	"bytes"
 	"io"
 	"testing"
 
+	"github.com/go-rfc/sse/internal/testutils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,8 +17,8 @@ func TestEOFIsReturned(t *testing.T) {
 }
 
 func TestBigEventGrowsTheBuffer(t *testing.T) {
-	expectedEv := newMessageEvent("", "", 32000)
-	decoder := newDecoder(messageEventToString(expectedEv))
+	expectedEv := testutils.NewMessageEvent("", "", 32000)
+	decoder := newDecoder(testutils.MessageEventToString(expectedEv))
 
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
@@ -170,7 +171,7 @@ func TestPureLineFeedsWithCarriageReturn(t *testing.T) {
 }
 
 func TestDecodeRetry(t *testing.T) {
-	decoder := NewDecoder(bytes.NewReader([]byte("retry: 100\nretry: a\n")))
+	decoder := New(bytes.NewReader([]byte("retry: 100\nretry: a\n")))
 	_, err := decoder.Decode()
 	assert.Equal(t, 100, decoder.Retry())
 	assert.Equal(t, io.EOF, err)
@@ -189,34 +190,34 @@ func BenchmarkDecodeShortEvent(b *testing.B) {
 }
 
 func BenchmarkDecode1kEvent(b *testing.B) {
-	ev := newMessageEvent("", "", 1000)
-	runDecodingBenchmark(b, messageEventToString(ev))
+	ev := testutils.NewMessageEvent("", "", 1000)
+	runDecodingBenchmark(b, testutils.MessageEventToString(ev))
 }
 
 func BenchmarkDecode4kEvent(b *testing.B) {
-	ev := newMessageEvent("", "", 4000)
-	runDecodingBenchmark(b, messageEventToString(ev))
+	ev := testutils.NewMessageEvent("", "", 4000)
+	runDecodingBenchmark(b, testutils.MessageEventToString(ev))
 }
 
 func BenchmarkDecode8kEvent(b *testing.B) {
-	ev := newMessageEvent("", "", 8000)
-	runDecodingBenchmark(b, messageEventToString(ev))
+	ev := testutils.NewMessageEvent("", "", 8000)
+	runDecodingBenchmark(b, testutils.MessageEventToString(ev))
 }
 
 func BenchmarkDecode16kEvent(b *testing.B) {
-	ev := newMessageEvent("", "", 16000)
-	runDecodingBenchmark(b, messageEventToString(ev))
+	ev := testutils.NewMessageEvent("", "", 16000)
+	runDecodingBenchmark(b, testutils.MessageEventToString(ev))
 }
 
 func newDecoder(data string) *Decoder {
 	reader := bytes.NewReader([]byte(data))
-	return NewDecoder(reader)
+	return New(reader)
 }
 
 func runDecodingBenchmark(b *testing.B, data string) {
 	reader := bytes.NewReader([]byte(data))
 	b.ResetTimer()
-	decoder := NewDecoder(reader)
+	decoder := New(reader)
 	for i := 0; i < b.N; i++ {
 		decoder.Decode()
 		reader.Seek(0, 0)

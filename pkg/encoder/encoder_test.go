@@ -1,16 +1,17 @@
-package sse
+package encoder
 
 import (
 	"bytes"
 	"testing"
 
+	"github.com/go-rfc/sse/pkg/base"
 	"github.com/stretchr/testify/assert"
 )
 
 var (
-	eventName      = &MessageEvent{Name: "first"}
-	eventNameAndID = &MessageEvent{Name: "first", LastEventID: "1"}
-	eventFull      = &MessageEvent{Name: "first", LastEventID: "1", Data: "some event data"}
+	eventName      = &base.MessageEvent{Name: "first"}
+	eventNameAndID = &base.MessageEvent{Name: "first", LastEventID: "1"}
+	eventFull      = &base.MessageEvent{Name: "first", LastEventID: "1", Data: "some event data"}
 )
 
 func TestEncoderName(t *testing.T) {
@@ -39,6 +40,6 @@ func TestEncoderSetRetry(t *testing.T) {
 
 func getEncoderAndOut() (*Encoder, *bytes.Buffer) {
 	out := new(bytes.Buffer)
-	e := NewEncoder(out)
+	e := New(out)
 	return e, out
 }

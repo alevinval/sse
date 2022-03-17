@@ -1,4 +1,4 @@
-package sse
+package eventsource
 
 import (
 	"testing"
@@ -69,8 +69,8 @@ func TestEventSourceConnectWriteAndReceiveShortEvent(t *testing.T) {
 		es, err := NewEventSource(handler.URL)
 		assert.Nil(t, err)
 
-		expectedEv := newMessageEvent("", "", 128)
-		go handler.SendAndClose(messageEventToString(expectedEv))
+		expectedEv := testutils.NewMessageEvent("", "", 128)
+		go handler.SendAndClose(testutils.MessageEventToString(expectedEv))
 
 		ev, ok := <-es.MessageEvents()
 		assert.True(t, ok)
@@ -83,8 +83,8 @@ func TestEventSourceConnectWriteAndReceiveLongEvent(t *testing.T) {
 		es, err := NewEventSource(handler.URL)
 		assert.Nil(t, err)
 
-		expectedEv := newMessageEvent("", "", 128)
-		go handler.SendAndClose(messageEventToString(expectedEv))
+		expectedEv := testutils.NewMessageEvent("", "", 128)
+		go handler.SendAndClose(testutils.MessageEventToString(expectedEv))
 
 		ev, ok := <-es.MessageEvents()
 		assert.True(t, ok)
@@ -98,16 +98,16 @@ func TestEventSourceLastEventID(t *testing.T) {
 		assert.Nil(t, err)
 
 		lastEventID := "123"
-		expected := newMessageEvent(lastEventID, "", 512)
-		go handler.SendWithID(messageEventToString(expected), expected.LastEventID)
+		expected := testutils.NewMessageEvent(lastEventID, "", 512)
+		go handler.SendWithID(testutils.MessageEventToString(expected), expected.LastEventID)
 
 		actual, ok := <-es.MessageEvents()
 		assert.True(t, ok)
 		assert.Equal(t, lastEventID, actual.LastEventID)
 		assert.Equal(t, expected.Data, actual.Data)
 
-		ev := newMessageEvent("", "", 32)
-		go handler.SendWithID(messageEventToString(ev), ev.LastEventID)
+		ev := testutils.NewMessageEvent("", "", 32)
+		go handler.SendWithID(testutils.MessageEventToString(ev), ev.LastEventID)
 
 		actual, ok = <-es.MessageEvents()
 		assert.True(t, ok)
@@ -122,8 +122,8 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 		es, err := NewEventSource(handler.URL)
 		assert.Nil(t, err)
 
-		handler.SendAndClose(retryEventToString(100))
-		go handler.Send(newMessageEventString("", "", 128))
+		handler.SendAndClose(testutils.RetryEventToString(100))
+		go handler.Send(testutils.NewMessageEventString("", "", 128))
 		select {
 		case _, ok := <-es.MessageEvents():
 			assert.True(t, ok)
@@ -132,8 +132,8 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 		}
 
 		// Smaller retry
-		handler.SendAndClose(retryEventToString(1))
-		go handler.Send(newMessageEventString("", "", 128))
+		handler.SendAndClose(testutils.RetryEventToString(1))
+		go handler.Send(testutils.NewMessageEventString("", "", 128))
 		select {
 		case _, ok := <-es.MessageEvents():
 			assert.True(t, ok)
@@ -175,7 +175,7 @@ func TestEventSourceDropConnectionCanReconnect(t *testing.T) {
 
 		handler.CloseActiveRequest()
 		time.Sleep(25 * time.Millisecond)
-		go handler.Send(newMessageEventString("", "", 128))
+		go handler.Send(testutils.NewMessageEventString("", "", 128))
 		_, ok := <-es.MessageEvents()
 		assert.True(t, ok)
 		assertStates(
@@ -192,15 +192,15 @@ func TestEventSourceLastEventIDHeaderOnReconnecting(t *testing.T) {
 		es, err := NewEventSource(handler.URL)
 		assert.Nil(t, err)
 
-		handler.Send(retryEventToString(1))
+		handler.Send(testutils.RetryEventToString(1))
 
 		// After closing, we retry and can poll the second message
-		go handler.SendAndCloseWithID(newMessageEventString("first", "", 128), "first")
+		go handler.SendAndCloseWithID(testutils.NewMessageEventString("first", "", 128), "first")
 		_, ok := <-es.MessageEvents()
 		assert.True(t, ok)
 		assert.Equal(t, "first", es.lastEventID)
 
-		go handler.SendWithID(newMessageEventString("second", "", 128), "second")
+		go handler.SendWithID(testutils.NewMessageEventString("second", "", 128), "second")
 		_, ok = <-es.MessageEvents()
 		assert.True(t, ok)
 		assert.Equal(t, "second", es.lastEventID)
