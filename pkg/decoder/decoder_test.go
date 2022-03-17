@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/go-rfc/sse/internal/testutils"
 	"github.com/stretchr/testify/assert"
@@ -173,7 +174,7 @@ func TestPureLineFeedsWithCarriageReturn(t *testing.T) {
 func TestDecodeRetry(t *testing.T) {
 	decoder := New(bytes.NewReader([]byte("retry: 100\nretry: a\n")))
 	_, err := decoder.Decode()
-	assert.Equal(t, 100, decoder.Retry())
+	assert.Equal(t, time.Duration(100)*time.Millisecond, decoder.Retry())
 	assert.Equal(t, io.EOF, err)
 }
 

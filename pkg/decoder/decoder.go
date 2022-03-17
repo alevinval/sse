@@ -6,19 +6,20 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-rfc/sse/pkg/base"
 )
 
 // Default retry time in milliseconds.
 // The spec recommends to use a value of a few seconds.
-const defaultRetry = 2500
+const defaultRetry = time.Duration(2500) * time.Millisecond
 
 type (
 	// Decoder accepts an io.Reader input and decodes message events from it.
 	Decoder struct {
 		lastEventID string
-		retry       int
+		retry       time.Duration
 		scanner     *bufio.Scanner
 		data        *bytes.Buffer
 	}
@@ -41,8 +42,8 @@ func NewSize(in io.Reader, bufferSize int) *Decoder {
 	return d
 }
 
-// Retry returns the amount of milliseconds to wait before attempting to reconnect to the event source.
-func (d *Decoder) Retry() int {
+// Retry returns the to wait before attempting to reconnect to the event source.
+func (d *Decoder) Retry() time.Duration {
 	return d.retry
 }
 
@@ -109,9 +110,8 @@ func (d *Decoder) Decode() (*base.MessageEvent, error) {
 		case "retry":
 			retry, err := strconv.Atoi(value)
 			if err == nil && retry >= 0 {
-				d.retry = retry
+				d.retry = time.Duration(retry) * time.Millisecond
 			}
-
 		default:
 			// Ignore field
 		}

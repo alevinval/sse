@@ -68,7 +68,7 @@ func (es *EventSource) connect() (err error) {
 // to retry no longer hold true.
 func (es *EventSource) reconnect() (err error) {
 	for es.mustReconnect(err) {
-		time.Sleep(time.Duration(es.d.Retry()) * time.Millisecond)
+		time.Sleep(es.d.Retry())
 		err = es.connectOnce()
 	}
 	if err != nil {
