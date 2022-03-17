@@ -3,6 +3,11 @@
 test:
 	go test -count=1 ./...
 
+.PHONY: cover
+cover:
+	go test -count=1 -cover -coverprofile coverage.out ./...
+	go tool cover -html coverage.out
+
 .PHONY: mod-update
 mod-update:
 	go get -u ./...
