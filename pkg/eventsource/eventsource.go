@@ -1,4 +1,4 @@
-package sse
+package eventsource
 
 import (
 	"errors"
@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/go-rfc/sse/pkg/base"
+	"github.com/go-rfc/sse/pkg/decoder"
 )
 
 const (
@@ -27,11 +30,11 @@ type (
 		url              string
 		requestModifiers []RequestModifier
 		lastEventID      string
-		d                *Decoder
+		d                *decoder.Decoder
 		resp             *http.Response
 		closed           bool
 		closedMutex      *sync.RWMutex
-		out              chan *MessageEvent
+		out              chan *base.MessageEvent
 		readyState       chan Status
 	}
 )
@@ -43,7 +46,7 @@ func NewEventSource(url string, requestModifiers ...RequestModifier) (*EventSour
 	es := &EventSource{
 		d:           nil,
 		url:         url,
-		out:         make(chan *MessageEvent),
+		out:         make(chan *base.MessageEvent),
 		readyState:  make(chan Status, 128),
 		closedMutex: new(sync.RWMutex),
 	}
@@ -82,7 +85,7 @@ func (es *EventSource) connectOnce() (err error) {
 		return
 	}
 	es.readyState <- Status{Open, nil}
-	es.d = NewDecoder(es.resp.Body)
+	es.d = decoder.New(es.resp.Body)
 	go es.consume()
 	return
 }
@@ -166,7 +169,7 @@ func (es *EventSource) URL() string {
 }
 
 // MessageEvents returns a channel of received events.
-func (es *EventSource) MessageEvents() <-chan *MessageEvent {
+func (es *EventSource) MessageEvents() <-chan *base.MessageEvent {
 	return es.out
 }
 

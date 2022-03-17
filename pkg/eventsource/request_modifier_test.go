@@ -1,4 +1,4 @@
-package sse
+package eventsource
 
 import (
 	"net/http"

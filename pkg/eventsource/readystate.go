@@ -1,4 +1,4 @@
-package sse
+package eventsource
 
 //go:generate stringer -type=ReadyState
 
