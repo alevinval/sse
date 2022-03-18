@@ -24,8 +24,7 @@ func TestEventSourceStates(t *testing.T) {
 	}{
 		{0, Connecting},
 		{1, Open},
-		{2, Closing},
-		{3, Closed},
+		{2, Closed},
 	} {
 		assert.Equal(t, test.expectedState, ReadyState(test.stateNumber))
 	}
@@ -40,7 +39,7 @@ func TestEventSourceConnectAndClose(t *testing.T) {
 		assert.Equal(t, url, es.URL())
 
 		es.Close(nil)
-		assertStates(t, []ReadyState{Connecting, Open, Closing, Closed}, es.ReadyState())
+		assertStates(t, []ReadyState{Connecting, Open, Closed}, es.ReadyState())
 	})
 }
 
@@ -63,7 +62,7 @@ func TestEventSourceWithInvalidContentType(t *testing.T) {
 		es, err := New(handler.URL)
 
 		assert.Equal(t, ErrContentType, err)
-		assertStates(t, []ReadyState{Connecting, Closing, Closed}, es.ReadyState())
+		assertStates(t, []ReadyState{Connecting, Closed}, es.ReadyState())
 	})
 }
 
@@ -163,7 +162,7 @@ func TestEventSourceDropConnectionCannotReconnect(t *testing.T) {
 		assert.False(t, ok)
 		assertStates(
 			t,
-			[]ReadyState{Connecting, Open, Connecting, Open, Closing, Closed},
+			[]ReadyState{Connecting, Open, Connecting, Open, Closed},
 			es.ReadyState(),
 		)
 

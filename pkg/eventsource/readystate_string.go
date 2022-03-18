@@ -10,13 +10,12 @@ func _() {
 	var x [1]struct{}
 	_ = x[Connecting-0]
 	_ = x[Open-1]
-	_ = x[Closing-2]
-	_ = x[Closed-3]
+	_ = x[Closed-2]
 }
 
-const _ReadyState_name = "ConnectingOpenClosingClosed"
+const _ReadyState_name = "ConnectingOpenClosed"
 
-var _ReadyState_index = [...]uint8{0, 10, 14, 21, 27}
+var _ReadyState_index = [...]uint8{0, 10, 14, 20}
 
 func (i ReadyState) String() string {
 	if i >= ReadyState(len(_ReadyState_index)-1) {

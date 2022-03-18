@@ -81,7 +81,6 @@ func (es *EventSource) Close(err error) {
 	if es.closed {
 		return
 	}
-	es.readyState <- Status{ReadyState: Closing, Err: err}
 	es.closed = true
 
 	if es.resp != nil {
