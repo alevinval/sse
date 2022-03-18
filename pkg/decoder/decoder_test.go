@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"testing"
 	"time"
@@ -101,6 +102,26 @@ func TestEventsWithNoDataThenWithNewLine(t *testing.T) {
 	ev2, err := decoder.Decode()
 	if assert.NoError(t, err) {
 		assert.Equal(t, "\n", ev2.Data)
+	}
+}
+
+func TestDecode_LastEventId_returnsId(t *testing.T) {
+	stream := fmt.Sprintf("data: test\nid: valid id\n\n")
+	decoder := newDecoder(stream)
+
+	ev, err := decoder.Decode()
+	if assert.NoError(t, err) {
+		assert.Equal(t, "valid id", ev.LastEventID)
+	}
+}
+
+func TestDecode_LastEventId_ignoresNullCharater(t *testing.T) {
+	stream := fmt.Sprintf("data: test\nid: invalid id \u0000\n\n")
+	decoder := newDecoder(stream)
+
+	ev, err := decoder.Decode()
+	if assert.NoError(t, err) {
+		assert.Equal(t, "", ev.LastEventID)
 	}
 }
 

@@ -70,7 +70,11 @@ func (d *Decoder) Decode() (*base.MessageEvent, error) {
 				// the name of any event as defined in the DOM Events spec.
 				// Decoder does not perform this check, hence it could yield
 				// events that would not be valid in a browser.
-				return &base.MessageEvent{LastEventID: d.lastEventID, Name: name, Data: d.data.String()}, nil
+				return &base.MessageEvent{
+					Name:        name,
+					Data:        d.data.String(),
+					LastEventID: d.lastEventID,
+				}, nil
 			}
 
 			continue
@@ -105,8 +109,10 @@ func (d *Decoder) Decode() (*base.MessageEvent, error) {
 			d.data.WriteByte('\n')
 			eventSeen = true
 		case "id":
-			d.lastEventID = value
-			eventSeen = true
+			if !strings.Contains(value, "\u0000") {
+				d.lastEventID = value
+				eventSeen = true
+			}
 		case "retry":
 			retry, err := strconv.Atoi(value)
 			if err == nil && retry >= 0 {
