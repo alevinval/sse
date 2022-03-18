@@ -32,7 +32,6 @@ func New(in io.Reader) *Decoder {
 }
 
 // NewSize returns a Decoder with a fixed buffer size.
-// This constructor is only available on go >= 1.6
 func NewSize(in io.Reader, bufferSize int) *Decoder {
 	d := &Decoder{scanner: bufio.NewScanner(in), data: new(bytes.Buffer), retry: defaultRetry}
 	if bufferSize > 0 {
@@ -53,24 +52,23 @@ func (d *Decoder) Decode() (*base.MessageEvent, error) {
 	var name string
 	var eventSeen bool
 
-	scanner := d.scanner
-	data := d.data
-	data.Reset()
-	for scanner.Scan() {
-		line := scanner.Text()
+	d.data.Reset()
+	for d.scanner.Scan() {
+		line := d.scanner.Text()
 		// Empty line? => Dispatch event
 		if len(line) == 0 {
 			if eventSeen {
 				// Trim the last LF
-				if l := data.Len(); l > 0 {
-					data.Truncate(l - 1)
+				if l := d.data.Len(); l > 0 {
+					d.data.Truncate(l - 1)
 				}
+
 				// Note the event source spec as defined by w3.org requires
 				// skips the event dispatching if the event name collides with
 				// the name of any event as defined in the DOM Events spec.
 				// Decoder does not perform this check, hence it could yield
 				// events that would not be valid in a browser.
-				return &base.MessageEvent{LastEventID: d.lastEventID, Name: name, Data: data.String()}, nil
+				return &base.MessageEvent{LastEventID: d.lastEventID, Name: name, Data: d.data.String()}, nil
 			}
 			continue
 		}
@@ -101,8 +99,8 @@ func (d *Decoder) Decode() (*base.MessageEvent, error) {
 			name = value
 			eventSeen = true
 		case "data":
-			data.WriteString(value)
-			data.WriteByte('\n')
+			d.data.WriteString(value)
+			d.data.WriteByte('\n')
 			eventSeen = true
 		case "id":
 			d.lastEventID = value

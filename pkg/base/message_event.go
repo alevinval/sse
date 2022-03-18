@@ -2,6 +2,8 @@ package base
 
 var _ (MessageEventGetter) = (*MessageEvent)(nil)
 
+// MessageEventGetter used by the decoder to be able to write any implementation
+// of message event
 type MessageEventGetter interface {
 	GetName() string
 	GetData() string
