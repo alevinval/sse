@@ -8,9 +8,17 @@ cover:
 	go test -count=1 -cover -coverprofile coverage.out ./...
 	go tool cover -html coverage.out
 
-.PHONY: bench
-bench:
-	go test -bench=. ./...
+.PHONY: bench-old
+bench-old:
+	go test -bench=. -count=5 ./... > old.txt
+
+.PHONY: bench-new
+bench-new:
+	go test -bench=. -count=5 ./... > new.txt
+
+.PHONY: bench-compare
+bench-compare:
+	benchtat old.txt new.txt
 
 .PHONY: mod-update
 mod-update:
