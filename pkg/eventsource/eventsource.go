@@ -13,49 +13,85 @@ import (
 )
 
 const (
-	allowedContentType = "text/event-stream"
+	ContentType = "text/event-stream"
 )
 
 var (
-	// ErrContentType error indicates the content-type header is not accepted
+	// ErrContentType means the content-type header of the server is not the
+	// expected one for an event-source. EventSource always expects
+	// `text/event-stream`. content-type.
 	ErrContentType = errors.New("eventsource: the content type of the stream is not allowed")
 
-	// ErrUnauthorized error indicates an authorization error of the connection request
+	// ErrUnauthorized means the server responded with an authorization error
+	// status code.
 	ErrUnauthorized = errors.New("eventsource: connection is unauthorized")
 )
 
-type (
-	// EventSource connects and processes events from an HTTP server-sent events stream.
-	EventSource struct {
-		url              string
-		requestModifiers []RequestModifier
-		lastEventID      string
-		d                *decoder.Decoder
-		resp             *http.Response
-		closed           bool
-		closedMutex      *sync.RWMutex
-		out              chan *base.MessageEvent
-		readyState       chan Status
-	}
-)
+// EventSource connects and processes events from an HTTP server-sent
+// events stream.
+type EventSource struct {
+	d                *decoder.Decoder
+	resp             *http.Response
+	closedMu         *sync.RWMutex
+	readyState       chan Status
+	out              chan *base.MessageEvent
+	url              string
+	lastEventID      string
+	requestModifiers []RequestModifier
+	closed           bool
+}
 
-// New connects and returns an EventSource.
-// Supports request modifiers in case you need to update HTTP headers
-// of the underlying request.
+// New EventSource, it accepts requests modifiers which allow to modify the
+// underlying HTTP request, see RequestModifier.
 func New(url string, requestModifiers ...RequestModifier) (*EventSource, error) {
 	es := &EventSource{
-		d:           nil,
-		url:         url,
-		out:         make(chan *base.MessageEvent),
-		readyState:  make(chan Status, 128),
-		closedMutex: new(sync.RWMutex),
+		d:          nil,
+		url:        url,
+		out:        make(chan *base.MessageEvent),
+		readyState: make(chan Status, 128),
+		closedMu:   new(sync.RWMutex),
 	}
 	es.requestModifiers = append(es.requestModifiers, requestModifiers...)
 	return es, es.connect()
 }
 
-// connect does a connection attempt, if the operation fails, attempt reconnecting
-// according to the spec.
+// URL of the EventSource.
+func (es *EventSource) URL() string {
+	return es.url
+}
+
+// MessageEvents returns a receive-only channel where events are going to be
+// sent to.
+func (es *EventSource) MessageEvents() <-chan *base.MessageEvent {
+	return es.out
+}
+
+// ReadyState exposes a channel with updates on the ready state of
+// the EventSource. It must be consumed together with MessageEvents.
+func (es *EventSource) ReadyState() <-chan Status {
+	return es.readyState
+}
+
+// Close the event source.
+// Once it has been closed, the event source cannot be re-used again.
+func (es *EventSource) Close(err error) {
+	es.closedMu.Lock()
+	defer es.closedMu.Unlock()
+
+	if es.closed {
+		return
+	}
+	es.readyState <- Status{ReadyState: Closing, Err: err}
+	es.closed = true
+
+	if es.resp != nil {
+		es.resp.Body.Close()
+	}
+
+	close(es.out)
+	es.readyState <- Status{ReadyState: Closed, Err: err}
+}
+
 func (es *EventSource) connect() (err error) {
 	err = es.connectOnce()
 	if err != nil {
@@ -64,8 +100,6 @@ func (es *EventSource) connect() (err error) {
 	return
 }
 
-// reconnect to the stream several until the operation succeeds or the conditions
-// to retry no longer hold true.
 func (es *EventSource) reconnect() (err error) {
 	for es.mustReconnect(err) {
 		time.Sleep(es.d.Retry())
@@ -77,38 +111,34 @@ func (es *EventSource) reconnect() (err error) {
 	return
 }
 
-// Attempts to connect and updates internal status depending on the outcome.
 func (es *EventSource) connectOnce() (err error) {
-	es.readyState <- Status{Connecting, nil}
+	es.readyState <- Status{ReadyState: Connecting, Err: nil}
 	es.resp, err = es.doHTTPConnect()
 	if err != nil {
 		return
 	}
-	es.readyState <- Status{Open, nil}
+	es.readyState <- Status{ReadyState: Open, Err: nil}
 	es.d = decoder.New(es.resp.Body)
 	go es.consume()
 	return
 }
 
 func (es *EventSource) doHTTPConnect() (*http.Response, error) {
-	// Prepare request
 	req, err := http.NewRequest("GET", es.url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	// apply request modifiers
 	for _, requestModifier := range es.requestModifiers {
 		requestModifier(req)
 	}
 
-	req.Header.Set("Accept", allowedContentType)
+	req.Header.Set("Accept", ContentType)
 	req.Header.Set("Cache-Control", "no-store")
 	if es.lastEventID != "" {
 		req.Header.Set("Last-Event-ID", es.lastEventID)
 	}
 
-	// Check response
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return resp, err
@@ -119,14 +149,12 @@ func (es *EventSource) doHTTPConnect() (*http.Response, error) {
 	}
 
 	mediaType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
-	if err != nil || mediaType != allowedContentType {
+	if err != nil || mediaType != ContentType {
 		return resp, ErrContentType
 	}
 	return resp, nil
 }
 
-// Method consume() must be called once connect() succeeds.
-// It parses the input reader and assigns the event output channel accordingly.
 func (es *EventSource) consume() {
 	for {
 		ev, err := es.d.Decode()
@@ -143,14 +171,14 @@ func (es *EventSource) consume() {
 	}
 }
 
-// Clients will reconnect if the connection is closed;
-// a client can be told to stop reconnecting using the HTTP 204 No Content response code.
 func (es *EventSource) mustReconnect(err error) bool {
-	es.closedMutex.RLock()
-	defer es.closedMutex.RUnlock()
+	es.closedMu.RLock()
+	defer es.closedMu.RUnlock()
+
 	if es.closed {
 		return false
 	}
+
 	switch err {
 	case ErrContentType:
 		return false
@@ -160,40 +188,6 @@ func (es *EventSource) mustReconnect(err error) bool {
 	if es.resp != nil && es.resp.StatusCode == http.StatusNoContent {
 		return false
 	}
+
 	return true
-}
-
-// URL returns the event source URL.
-func (es *EventSource) URL() string {
-	return es.url
-}
-
-// MessageEvents returns a channel of received events.
-func (es *EventSource) MessageEvents() <-chan *base.MessageEvent {
-	return es.out
-}
-
-// ReadyState exposes a channel with updates on the ready state
-// of the event source.
-// It must be consumed together with MessageEvents.
-func (es *EventSource) ReadyState() <-chan Status {
-	return es.readyState
-}
-
-// Close the event source. Once closed, the event source cannot be re-used again.
-func (es *EventSource) Close(err error) {
-	es.closedMutex.Lock()
-	defer es.closedMutex.Unlock()
-	if es.closed {
-		return
-	}
-	es.readyState <- Status{Closing, err}
-	es.closed = true
-
-	if es.resp != nil {
-		es.resp.Body.Close()
-	}
-
-	close(es.out)
-	es.readyState <- Status{Closed, err}
 }

@@ -15,15 +15,13 @@ import (
 // The spec recommends to use a value of a few seconds.
 const defaultRetry = time.Duration(2500) * time.Millisecond
 
-type (
-	// Decoder accepts an io.Reader input and decodes message events from it.
-	Decoder struct {
-		lastEventID string
-		retry       time.Duration
-		scanner     *bufio.Scanner
-		data        *bytes.Buffer
-	}
-)
+// Decoder accepts an io.Reader input and decodes message events from it.
+type Decoder struct {
+	scanner     *bufio.Scanner
+	data        *bytes.Buffer
+	lastEventID string
+	retry       time.Duration
+}
 
 // New returns a Decoder with a growing buffer.
 // Lines are limited to bufio.MaxScanTokenSize - 1.
@@ -46,18 +44,22 @@ func (d *Decoder) Retry() time.Duration {
 	return d.retry
 }
 
-// Decode reads the input stream and parses events from it. Any error while reading is  returned.
+// Decode reads the input stream and parses events from it.
+// Any error while reading is  returned.
 func (d *Decoder) Decode() (*base.MessageEvent, error) {
-	// Stores event data, which is filled after one or many lines from the reader
-	var name string
+	// Stores event data, which is filled after one or many lines
+	// from the reader
+	var name, fieldName, value string
 	var eventSeen bool
 
 	d.data.Reset()
 	for d.scanner.Scan() {
 		line := d.scanner.Text()
+
 		// Empty line? => Dispatch event
 		if len(line) == 0 {
 			if eventSeen {
+
 				// Trim the last LF
 				if l := d.data.Len(); l > 0 {
 					d.data.Truncate(l - 1)
@@ -70,6 +72,7 @@ func (d *Decoder) Decode() (*base.MessageEvent, error) {
 				// events that would not be valid in a browser.
 				return &base.MessageEvent{LastEventID: d.lastEventID, Name: name, Data: d.data.String()}, nil
 			}
+
 			continue
 		}
 
@@ -79,7 +82,6 @@ func (d *Decoder) Decode() (*base.MessageEvent, error) {
 			continue
 		}
 
-		var fieldName, value string
 		if colonIndex == -1 {
 			fieldName = line
 			value = ""

@@ -1,10 +1,9 @@
 # Go client for HTML5 Server-Sent Events
 
-[![Build Status](https://travis-ci.org/go-rfc/sse.svg?branch=master)](https://travis-ci.org/go-rfc/sse)
-[![GoDoc](https://godoc.org/github.com/go-rfc/sse?status.svg)](https://godoc.org/github.com/go-rfc/sse)
+[![GoDoc](https://pkg.go.dev/badge/github.com/go-rfc/sse/pkg/eventsource)](https://pkg.go.dev/github.com/go-rfc/sse/pkg/eventsource)
 
 The package provides fast primitives to manipulate Server-Sent Events as
-defined by the [HTML5 standard](https://html.spec.whatwg.org/multipage/comms.html).
+defined by the [HTML5 spec](https://html.spec.whatwg.org/multipage/server-sent-events.html).
 
 Get the package with `go get github.com/go-rfc/sse`
 
@@ -32,7 +31,6 @@ The library includes `WithBasicAuth` and `WithAuthorizationBearer` modifiers.
 
 ```go
 eventsource.New("http://foo.com/stocks/AAPL", eventsource.WithBasicAuth("user", "password"))
-
 eventsource.New("http://foo.com/stocks/AAPL", eventsource.WithAuthorizationBearer("token"))
 ```
 

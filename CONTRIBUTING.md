@@ -2,24 +2,24 @@
 
 Contributions are welcome granted that:
 
-- HTML5 server-sent events specification is respected.
-- Existing tests do not break.
+- HTML5 server-sent events spec is respected.
 - Source code is enhanced.
-- Code is formatted with `gofmt` (or `goimports`)
+- Changes are covered by more tests.
+- Existing tests do not break.
 
-For bug fixes (excluding bugs in tests) also:
-
-- Include a test that reproduces the bug, and passes.
+Any change must be accompanied by a unit test, in cases of bugs there must
+be a specific test that reproduces the bug, and passes.
 
 # Performance improvements
 
-Performance improvements to the library should be complimented with a benchmark
-comparison. The benchmarks should run at least 10 times. Use a tool such as 
-benchstat to ensure the results are statistically relevant.
+Performance improvements must be accompanied with a benchmark comparison.
+The benchmarks should run at least 5 times. Use a tool such as benchstat to
+ensure the results are statistically relevant. Include the output of benchstat
+in the description of your pull request.
 
-```
-go test -run=none -bench=. -c=10 github.com/go-rfc/sse> old.txt
-go test -run=none -bench=. -c=10 github.com/go-rfc/sse> new.txt
+```bash
+go test -bench=. -count=5 ./... > old.txt
+go test -bench=. -count=5 ./... > new.txt
 benchstat old.txt new.txt
 ```
 
