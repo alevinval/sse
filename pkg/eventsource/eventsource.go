@@ -39,10 +39,10 @@ type (
 	}
 )
 
-// NewEventSource connects and returns an EventSource.
+// New connects and returns an EventSource.
 // Supports request modifiers in case you need to update HTTP headers
 // of the underlying request.
-func NewEventSource(url string, requestModifiers ...RequestModifier) (*EventSource, error) {
+func New(url string, requestModifiers ...RequestModifier) (*EventSource, error) {
 	es := &EventSource{
 		d:           nil,
 		url:         url,

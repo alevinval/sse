@@ -34,7 +34,7 @@ func TestEventSourceStates(t *testing.T) {
 func TestEventSourceConnectAndClose(t *testing.T) {
 	runTest(t, func(handler *testutils.TestServerHandler) {
 		url := handler.URL
-		es, err := NewEventSource(url)
+		es, err := New(url)
 
 		assert.Nil(t, err)
 		assert.Equal(t, url, es.URL())
@@ -47,7 +47,7 @@ func TestEventSourceConnectAndClose(t *testing.T) {
 func TestEventSourceConnectAndCloseThenReceive(t *testing.T) {
 	runTest(t, func(handler *testutils.TestServerHandler) {
 		url := handler.URL
-		es, err := NewEventSource(url)
+		es, err := New(url)
 
 		assert.Nil(t, err)
 		es.Close(nil)
@@ -60,7 +60,7 @@ func TestEventSourceConnectAndCloseThenReceive(t *testing.T) {
 func TestEventSourceWithInvalidContentType(t *testing.T) {
 	runTest(t, func(handler *testutils.TestServerHandler) {
 		handler.ContentType = contentTypeTextPlain
-		es, err := NewEventSource(handler.URL)
+		es, err := New(handler.URL)
 
 		assert.Equal(t, ErrContentType, err)
 		assertStates(t, []ReadyState{Connecting, Closing, Closed}, es.ReadyState())
@@ -69,7 +69,7 @@ func TestEventSourceWithInvalidContentType(t *testing.T) {
 
 func TestEventSourceConnectWriteAndReceiveShortEvent(t *testing.T) {
 	runTest(t, func(handler *testutils.TestServerHandler) {
-		es, err := NewEventSource(handler.URL)
+		es, err := New(handler.URL)
 		assert.Nil(t, err)
 
 		expectedEv := testutils.NewMessageEvent("", "", 128)
@@ -83,7 +83,7 @@ func TestEventSourceConnectWriteAndReceiveShortEvent(t *testing.T) {
 
 func TestEventSourceConnectWriteAndReceiveLongEvent(t *testing.T) {
 	runTest(t, func(handler *testutils.TestServerHandler) {
-		es, err := NewEventSource(handler.URL)
+		es, err := New(handler.URL)
 		assert.Nil(t, err)
 
 		expectedEv := testutils.NewMessageEvent("", "", 128)
@@ -97,7 +97,7 @@ func TestEventSourceConnectWriteAndReceiveLongEvent(t *testing.T) {
 
 func TestEventSourceLastEventID(t *testing.T) {
 	runTest(t, func(handler *testutils.TestServerHandler) {
-		es, err := NewEventSource(handler.URL)
+		es, err := New(handler.URL)
 		assert.Nil(t, err)
 
 		lastEventID := "123"
@@ -122,7 +122,7 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 	runTest(t, func(handler *testutils.TestServerHandler) {
 		handler.MaxRequestsToProcess = 3
 
-		es, err := NewEventSource(handler.URL)
+		es, err := New(handler.URL)
 		assert.Nil(t, err)
 
 		handler.SendAndClose(getRetryEventAsString(100))
@@ -154,7 +154,7 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 
 func TestEventSourceDropConnectionCannotReconnect(t *testing.T) {
 	runTest(t, func(handler *testutils.TestServerHandler) {
-		es, err := NewEventSource(handler.URL)
+		es, err := New(handler.URL)
 		assert.Nil(t, err)
 
 		handler.CloseActiveRequest()
@@ -173,7 +173,7 @@ func TestEventSourceDropConnectionCannotReconnect(t *testing.T) {
 func TestEventSourceDropConnectionCanReconnect(t *testing.T) {
 	runTest(t, func(handler *testutils.TestServerHandler) {
 		handler.MaxRequestsToProcess = 2
-		es, err := NewEventSource(handler.URL)
+		es, err := New(handler.URL)
 		assert.Nil(t, err)
 
 		handler.CloseActiveRequest()
@@ -192,7 +192,7 @@ func TestEventSourceDropConnectionCanReconnect(t *testing.T) {
 func TestEventSourceLastEventIDHeaderOnReconnecting(t *testing.T) {
 	runTest(t, func(handler *testutils.TestServerHandler) {
 		handler.MaxRequestsToProcess = 2
-		es, err := NewEventSource(handler.URL)
+		es, err := New(handler.URL)
 		assert.Nil(t, err)
 
 		handler.Send(getRetryEventAsString(1))
@@ -216,7 +216,7 @@ func TestEventSourceWithBasicAuth(t *testing.T) {
 		handler.BasicAuth.Password = basicAuthPassword
 
 		url := handler.URL
-		es, err := NewEventSource(url, WithBasicAuth("foo", "bar"))
+		es, err := New(url, WithBasicAuth("foo", "bar"))
 
 		assert.Nil(t, err)
 		es.Close(nil)
@@ -232,7 +232,7 @@ func TestEventSourceWithBasicAuthInvalidPassword(t *testing.T) {
 		handler.BasicAuth.Password = basicAuthPassword
 
 		url := handler.URL
-		es, err := NewEventSource(url, WithBasicAuth("foo", ""))
+		es, err := New(url, WithBasicAuth("foo", ""))
 
 		assert.Equal(t, ErrUnauthorized, err)
 		es.Close(nil)
