@@ -17,25 +17,25 @@ var (
 
 func TestEncoderName(t *testing.T) {
 	e, out := getEncoderAndOut()
-	e.Write(eventName)
+	e.WriteEvent(eventName)
 	assert.Equal(t, "name: first\n\n", out.String())
 }
 
 func TestEncoderNameAndID(t *testing.T) {
 	e, out := getEncoderAndOut()
-	e.Write(eventNameAndID)
+	e.WriteEvent(eventNameAndID)
 	assert.Equal(t, "id: 1\nname: first\n\n", out.String())
 }
 
 func TestEncoderFullEvent(t *testing.T) {
 	e, out := getEncoderAndOut()
-	e.Write(eventFull)
+	e.WriteEvent(eventFull)
 	assert.Equal(t, "id: 1\nname: first\ndata: some event data\n\n", out.String())
 }
 
 func TestEncoderSetRetry(t *testing.T) {
 	e, out := getEncoderAndOut()
-	e.SetRetry(123)
+	e.WriteRetry(123)
 	assert.Equal(t, "retry: 123\n", out.String())
 }
 
@@ -80,7 +80,7 @@ func runEncodingBenchmark(b *testing.B, event *base.MessageEvent) {
 	encoder := New(out)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		encoder.Write(event)
+		encoder.WriteEvent(event)
 		out.Reset()
 	}
 }

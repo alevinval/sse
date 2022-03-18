@@ -20,7 +20,7 @@ func New(out io.Writer) *Encoder {
 	}
 }
 
-func (e *Encoder) Write(event base.MessageEventGetter) (int, error) {
+func (e *Encoder) WriteEvent(event base.MessageEventGetter) (int, error) {
 	e.buf.Reset()
 
 	if event.GetLastEventID() != "" {
@@ -46,7 +46,7 @@ func (e *Encoder) Write(event base.MessageEventGetter) (int, error) {
 	return e.out.Write(e.buf.Bytes())
 }
 
-func (e *Encoder) SetRetry(retryDelayInMillis int) {
+func (e *Encoder) WriteRetry(retryDelayInMillis int) {
 	e.buf.Reset()
 	e.buf.WriteString("retry: ")
 	e.buf.WriteString(strconv.Itoa(retryDelayInMillis))

@@ -251,6 +251,6 @@ func runDecodingBenchmark(b *testing.B, data string) {
 func getMessageEventAsString(ev *base.MessageEvent) string {
 	out := new(bytes.Buffer)
 	e := encoder.New(out)
-	e.Write(ev)
+	e.WriteEvent(ev)
 	return out.String()
 }

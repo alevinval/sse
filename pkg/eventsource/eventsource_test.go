@@ -277,13 +277,13 @@ func newMessageEventString(lastEventID, name string, dataSize int) string {
 func getMessageEventAsString(ev *base.MessageEvent) string {
 	out := new(bytes.Buffer)
 	e := encoder.New(out)
-	e.Write(ev)
+	e.WriteEvent(ev)
 	return out.String()
 }
 
 func getRetryEventAsString(n int) string {
 	out := new(bytes.Buffer)
 	e := encoder.New(out)
-	e.SetRetry(n)
+	e.WriteRetry(n)
 	return out.String()
 }
