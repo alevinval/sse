@@ -1,10 +1,13 @@
 package eventsource
 
 import (
+	"bytes"
 	"testing"
 	"time"
 
 	"github.com/go-rfc/sse/internal/testutils"
+	"github.com/go-rfc/sse/pkg/base"
+	"github.com/go-rfc/sse/pkg/encoder"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -70,7 +73,7 @@ func TestEventSourceConnectWriteAndReceiveShortEvent(t *testing.T) {
 		assert.Nil(t, err)
 
 		expectedEv := testutils.NewMessageEvent("", "", 128)
-		go handler.SendAndClose(testutils.MessageEventToString(expectedEv))
+		go handler.SendAndClose(getMessageEventAsString(expectedEv))
 
 		ev, ok := <-es.MessageEvents()
 		assert.True(t, ok)
@@ -84,7 +87,7 @@ func TestEventSourceConnectWriteAndReceiveLongEvent(t *testing.T) {
 		assert.Nil(t, err)
 
 		expectedEv := testutils.NewMessageEvent("", "", 128)
-		go handler.SendAndClose(testutils.MessageEventToString(expectedEv))
+		go handler.SendAndClose(getMessageEventAsString(expectedEv))
 
 		ev, ok := <-es.MessageEvents()
 		assert.True(t, ok)
@@ -99,7 +102,7 @@ func TestEventSourceLastEventID(t *testing.T) {
 
 		lastEventID := "123"
 		expected := testutils.NewMessageEvent(lastEventID, "", 512)
-		go handler.SendWithID(testutils.MessageEventToString(expected), expected.LastEventID)
+		go handler.SendWithID(getMessageEventAsString(expected), expected.LastEventID)
 
 		actual, ok := <-es.MessageEvents()
 		assert.True(t, ok)
@@ -107,7 +110,7 @@ func TestEventSourceLastEventID(t *testing.T) {
 		assert.Equal(t, expected.Data, actual.Data)
 
 		ev := testutils.NewMessageEvent("", "", 32)
-		go handler.SendWithID(testutils.MessageEventToString(ev), ev.LastEventID)
+		go handler.SendWithID(getMessageEventAsString(ev), ev.LastEventID)
 
 		actual, ok = <-es.MessageEvents()
 		assert.True(t, ok)
@@ -122,8 +125,8 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 		es, err := NewEventSource(handler.URL)
 		assert.Nil(t, err)
 
-		handler.SendAndClose(testutils.RetryEventToString(100))
-		go handler.Send(testutils.NewMessageEventString("", "", 128))
+		handler.SendAndClose(getRetryEventAsString(100))
+		go handler.Send(newMessageEventString("", "", 128))
 		select {
 		case _, ok := <-es.MessageEvents():
 			assert.True(t, ok)
@@ -132,8 +135,8 @@ func TestEventSourceRetryIsRespected(t *testing.T) {
 		}
 
 		// Smaller retry
-		handler.SendAndClose(testutils.RetryEventToString(1))
-		go handler.Send(testutils.NewMessageEventString("", "", 128))
+		handler.SendAndClose(getRetryEventAsString(1))
+		go handler.Send(newMessageEventString("", "", 128))
 		select {
 		case _, ok := <-es.MessageEvents():
 			assert.True(t, ok)
@@ -175,7 +178,7 @@ func TestEventSourceDropConnectionCanReconnect(t *testing.T) {
 
 		handler.CloseActiveRequest()
 		time.Sleep(25 * time.Millisecond)
-		go handler.Send(testutils.NewMessageEventString("", "", 128))
+		go handler.Send(newMessageEventString("", "", 128))
 		_, ok := <-es.MessageEvents()
 		assert.True(t, ok)
 		assertStates(
@@ -192,15 +195,15 @@ func TestEventSourceLastEventIDHeaderOnReconnecting(t *testing.T) {
 		es, err := NewEventSource(handler.URL)
 		assert.Nil(t, err)
 
-		handler.Send(testutils.RetryEventToString(1))
+		handler.Send(getRetryEventAsString(1))
 
 		// After closing, we retry and can poll the second message
-		go handler.SendAndCloseWithID(testutils.NewMessageEventString("first", "", 128), "first")
+		go handler.SendAndCloseWithID(newMessageEventString("first", "", 128), "first")
 		_, ok := <-es.MessageEvents()
 		assert.True(t, ok)
 		assert.Equal(t, "first", es.lastEventID)
 
-		go handler.SendWithID(testutils.NewMessageEventString("second", "", 128), "second")
+		go handler.SendWithID(newMessageEventString("second", "", 128), "second")
 		_, ok = <-es.MessageEvents()
 		assert.True(t, ok)
 		assert.Equal(t, "second", es.lastEventID)
@@ -265,4 +268,23 @@ func runTest(t *testing.T, test testFn) {
 	defer server.Close()
 
 	test(server)
+}
+
+func newMessageEventString(lastEventID, name string, dataSize int) string {
+	ev := testutils.NewMessageEvent(lastEventID, name, dataSize)
+	return getMessageEventAsString(ev)
+}
+
+func getMessageEventAsString(ev *base.MessageEvent) string {
+	out := new(bytes.Buffer)
+	e := encoder.New(out)
+	e.Write(ev)
+	return out.String()
+}
+
+func getRetryEventAsString(n int) string {
+	out := new(bytes.Buffer)
+	e := encoder.New(out)
+	e.SetRetry(n)
+	return out.String()
 }
