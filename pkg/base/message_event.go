@@ -15,6 +15,11 @@ type MessageEvent struct {
 	ID   string
 	Name string
 	Data string
+
+	// HasID is used to signal that the ID has been reset.
+	// This is necessary because we cannot differentiate empty string from
+	// whether it was not sent, or it was sent with empty value.
+	HasID bool
 }
 
 // GetID returns the ID of the event.

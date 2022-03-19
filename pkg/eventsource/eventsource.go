@@ -165,7 +165,7 @@ func (es *EventSource) consume() {
 			}
 			return
 		}
-		if ev.ID != "" {
+		if ev.HasID {
 			es.lastEventID = ev.ID
 		}
 		es.out <- ev

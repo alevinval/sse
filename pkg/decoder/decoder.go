@@ -49,7 +49,7 @@ func (d *Decoder) Decode() (*base.MessageEvent, error) {
 	// Stores event data, which is filled after one or many lines
 	// from the reader
 	var id, name, value, fieldName string
-	var eventSeen bool
+	var eventSeen, hasID bool
 
 	d.data.Reset()
 	for d.scanner.Scan() {
@@ -70,9 +70,10 @@ func (d *Decoder) Decode() (*base.MessageEvent, error) {
 				// Decoder does not perform this check, hence it could yield
 				// events that would not be valid in a browser.
 				return &base.MessageEvent{
-					ID:   id,
-					Name: name,
-					Data: d.data.String(),
+					ID:    id,
+					Name:  name,
+					Data:  d.data.String(),
+					HasID: hasID,
 				}, nil
 			}
 
@@ -111,6 +112,7 @@ func (d *Decoder) Decode() (*base.MessageEvent, error) {
 			if !strings.ContainsAny(value, "\u0000") {
 				id = value
 				eventSeen = true
+				hasID = true
 			}
 		case "retry":
 			retry, err := strconv.Atoi(value)
