@@ -38,7 +38,7 @@ func TestEventSourceConnectAndClose(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, url, es.URL())
 
-		es.Close(nil)
+		es.Close()
 		assertStates(t, []ReadyState{Connecting, Open, Closed}, es.ReadyState())
 	})
 }
@@ -49,7 +49,7 @@ func TestEventSourceConnectAndCloseThenReceive(t *testing.T) {
 		es, err := New(url)
 
 		assert.Nil(t, err)
-		es.Close(nil)
+		es.Close()
 
 		_, ok := <-es.MessageEvents()
 		assert.False(t, ok)
@@ -277,7 +277,7 @@ func TestEventSourceWithBasicAuth(t *testing.T) {
 		es, err := New(url, WithBasicAuth("foo", "bar"))
 
 		assert.Nil(t, err)
-		es.Close(nil)
+		es.Close()
 
 		_, ok := <-es.MessageEvents()
 		assert.False(t, ok)
@@ -293,7 +293,7 @@ func TestEventSourceWithBasicAuthInvalidPassword(t *testing.T) {
 		es, err := New(url, WithBasicAuth("foo", ""))
 
 		assert.Equal(t, ErrUnauthorized, err)
-		es.Close(nil)
+		es.Close()
 
 		_, ok := <-es.MessageEvents()
 		assert.False(t, ok)

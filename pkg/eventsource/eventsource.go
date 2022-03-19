@@ -74,7 +74,11 @@ func (es *EventSource) ReadyState() <-chan Status {
 
 // Close the event source.
 // Once it has been closed, the event source cannot be re-used again.
-func (es *EventSource) Close(err error) {
+func (es *EventSource) Close() {
+	es.close(nil)
+}
+
+func (es *EventSource) close(err error) {
 	es.closedMu.Lock()
 	defer es.closedMu.Unlock()
 
@@ -94,7 +98,7 @@ func (es *EventSource) Close(err error) {
 func (es *EventSource) connect() (err error) {
 	err = es.connectOnce()
 	if err != nil {
-		es.Close(err)
+		es.close(err)
 	}
 	return
 }
@@ -105,7 +109,7 @@ func (es *EventSource) reconnect() (err error) {
 		err = es.connectOnce()
 	}
 	if err != nil {
-		es.Close(err)
+		es.close(err)
 	}
 	return
 }
@@ -161,7 +165,7 @@ func (es *EventSource) consume() {
 			if es.mustReconnect(err) {
 				es.reconnect()
 			} else {
-				es.Close(err)
+				es.close(err)
 			}
 			return
 		}
