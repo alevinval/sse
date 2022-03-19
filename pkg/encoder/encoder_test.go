@@ -15,28 +15,40 @@ var (
 	eventFull      = &base.MessageEvent{Name: "first", LastEventID: "1", Data: "some event data"}
 )
 
-func TestEncoderName(t *testing.T) {
-	e, out := getEncoderAndOut()
-	e.WriteEvent(eventName)
+func TestEncoder_WriteEvent_encodesName(t *testing.T) {
+	sut, out := getEncoderAndOut()
+	sut.WriteEvent(eventName)
 	assert.Equal(t, "name: first\n\n", out.String())
 }
 
-func TestEncoderNameAndID(t *testing.T) {
-	e, out := getEncoderAndOut()
-	e.WriteEvent(eventNameAndID)
+func TestEncoder_WriteEvent_encodesNameAndLastEventID(t *testing.T) {
+	sut, out := getEncoderAndOut()
+	sut.WriteEvent(eventNameAndID)
 	assert.Equal(t, "id: 1\nname: first\n\n", out.String())
 }
 
-func TestEncoderFullEvent(t *testing.T) {
-	e, out := getEncoderAndOut()
-	e.WriteEvent(eventFull)
+func TestEncoder_WriteEvent_encodesFullEvent(t *testing.T) {
+	sut, out := getEncoderAndOut()
+	sut.WriteEvent(eventFull)
 	assert.Equal(t, "id: 1\nname: first\ndata: some event data\n\n", out.String())
 }
 
-func TestEncoderSetRetry(t *testing.T) {
+func TestEncoder_WriteRetry_encodesRetry(t *testing.T) {
 	e, out := getEncoderAndOut()
 	e.WriteRetry(123)
 	assert.Equal(t, "retry: 123\n", out.String())
+}
+
+func TestEncoder_WriteID_encodesEmptyID(t *testing.T) {
+	e, out := getEncoderAndOut()
+	e.WriteID("")
+	assert.Equal(t, "id\n", out.String())
+}
+
+func TestEncoder_WriteID_encodesID(t *testing.T) {
+	e, out := getEncoderAndOut()
+	e.WriteID("some id")
+	assert.Equal(t, "id: some id\n", out.String())
 }
 
 func BenchmarkEncodeEmptyEvent(b *testing.B) {
