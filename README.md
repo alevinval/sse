@@ -61,7 +61,7 @@ encoder := encoder.New(out)
 encoder.WriteRetry(1000)
 
 event := &sse.MessageEvent{
-    LastEventID: "",
+    ID: "some id",
     Name: "stock-update",
     Data: "AAPL 30.09",
 }

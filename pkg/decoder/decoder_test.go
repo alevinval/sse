@@ -26,7 +26,7 @@ func TestBigEventGrowsTheBuffer(t *testing.T) {
 
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, expectedEv.LastEventID, ev.LastEventID)
+		assert.Equal(t, expectedEv.ID, ev.ID)
 		assert.Equal(t, expectedEv.Name, ev.Name)
 		assert.Equal(t, expectedEv.Data, ev.Data)
 	}
@@ -64,7 +64,7 @@ func TestStocksExample(t *testing.T) {
 	decoder := newDecoder("data: YHOO\ndata: +2\ndata: 10\n\n")
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "", ev.LastEventID)
+		assert.Equal(t, "", ev.ID)
 		assert.Equal(t, "YHOO\n+2\n10", ev.Data)
 	}
 }
@@ -111,7 +111,7 @@ func TestDecode_LastEventId_returnsId(t *testing.T) {
 
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "valid id", ev.LastEventID)
+		assert.Equal(t, "valid id", ev.ID)
 	}
 }
 
@@ -121,7 +121,7 @@ func TestDecode_LastEventId_ignoresNullCharater(t *testing.T) {
 
 	ev, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "", ev.LastEventID)
+		assert.Equal(t, "", ev.ID)
 	}
 }
 
@@ -130,19 +130,19 @@ func TestCommentIsIgnoredAndDataIsNot(t *testing.T) {
 
 	ev1, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "1", ev1.LastEventID)
+		assert.Equal(t, "1", ev1.ID)
 		assert.Equal(t, "first event", ev1.Data)
 	}
 
 	ev2, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "", ev2.LastEventID)
+		assert.Equal(t, "", ev2.ID)
 		assert.Equal(t, "second event", ev2.Data)
 	}
 
 	ev3, err := decoder.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "", ev3.LastEventID)
+		assert.Equal(t, "", ev3.ID)
 		assert.Equal(t, " third event", ev3.Data)
 	}
 }

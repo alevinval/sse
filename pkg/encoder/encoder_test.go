@@ -11,8 +11,8 @@ import (
 
 var (
 	eventName      = &base.MessageEvent{Name: "first"}
-	eventNameAndID = &base.MessageEvent{Name: "first", LastEventID: "1"}
-	eventFull      = &base.MessageEvent{Name: "first", LastEventID: "1", Data: "some event data"}
+	eventNameAndID = &base.MessageEvent{ID: "1", Name: "first"}
+	eventFull      = &base.MessageEvent{ID: "1", Name: "first", Data: "some event data"}
 )
 
 func TestEncoder_WriteEvent_encodesName(t *testing.T) {
@@ -21,7 +21,7 @@ func TestEncoder_WriteEvent_encodesName(t *testing.T) {
 	assert.Equal(t, "name: first\n\n", out.String())
 }
 
-func TestEncoder_WriteEvent_encodesNameAndLastEventID(t *testing.T) {
+func TestEncoder_WriteEvent_encodesNameAndID(t *testing.T) {
 	sut, out := getEncoderAndOut()
 	sut.WriteEvent(eventNameAndID)
 	assert.Equal(t, "id: 1\nname: first\n\n", out.String())

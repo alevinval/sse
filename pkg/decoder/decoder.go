@@ -17,10 +17,9 @@ const defaultRetry = time.Duration(2500) * time.Millisecond
 
 // Decoder accepts an io.Reader input and decodes message events from it.
 type Decoder struct {
-	scanner     *bufio.Scanner
-	data        *bytes.Buffer
-	lastEventID string
-	retry       time.Duration
+	scanner *bufio.Scanner
+	data    *bytes.Buffer
+	retry   time.Duration
 }
 
 // New returns a Decoder with a growing buffer.
@@ -49,7 +48,7 @@ func (d *Decoder) Retry() time.Duration {
 func (d *Decoder) Decode() (*base.MessageEvent, error) {
 	// Stores event data, which is filled after one or many lines
 	// from the reader
-	var name, fieldName, value string
+	var id, name, value, fieldName string
 	var eventSeen bool
 
 	d.data.Reset()
@@ -71,9 +70,9 @@ func (d *Decoder) Decode() (*base.MessageEvent, error) {
 				// Decoder does not perform this check, hence it could yield
 				// events that would not be valid in a browser.
 				return &base.MessageEvent{
-					Name:        name,
-					Data:        d.data.String(),
-					LastEventID: d.lastEventID,
+					ID:   id,
+					Name: name,
+					Data: d.data.String(),
 				}, nil
 			}
 
@@ -109,8 +108,8 @@ func (d *Decoder) Decode() (*base.MessageEvent, error) {
 			d.data.WriteByte('\n')
 			eventSeen = true
 		case "id":
-			if !strings.Contains(value, "\u0000") {
-				d.lastEventID = value
+			if !strings.ContainsAny(value, "\u0000") {
+				id = value
 				eventSeen = true
 			}
 		case "retry":

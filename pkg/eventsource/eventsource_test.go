@@ -99,21 +99,23 @@ func TestEventSourceLastEventID(t *testing.T) {
 		es, err := New(handler.URL)
 		assert.Nil(t, err)
 
-		lastEventID := "123"
-		expected := testutils.NewMessageEvent(lastEventID, "", 512)
-		go handler.SendWithID(getMessageEventAsString(expected), expected.LastEventID)
+		expectedLastEventID := "123"
+		expectedEvent := testutils.NewMessageEvent(expectedLastEventID, "", 512)
+		go handler.SendWithID(getMessageEventAsString(expectedEvent), expectedEvent.ID)
 
 		actual, ok := <-es.MessageEvents()
 		assert.True(t, ok)
-		assert.Equal(t, lastEventID, actual.LastEventID)
-		assert.Equal(t, expected.Data, actual.Data)
+		assert.Equal(t, expectedLastEventID, es.lastEventID)
+		assert.Equal(t, expectedLastEventID, actual.ID)
+		assert.Equal(t, expectedEvent.Data, actual.Data)
 
 		ev := testutils.NewMessageEvent("", "", 32)
-		go handler.SendWithID(getMessageEventAsString(ev), ev.LastEventID)
+		go handler.SendWithID(getMessageEventAsString(ev), ev.ID)
 
 		actual, ok = <-es.MessageEvents()
 		assert.True(t, ok)
-		assert.Equal(t, lastEventID, actual.LastEventID)
+		assert.Equal(t, expectedLastEventID, es.lastEventID)
+		assert.Equal(t, "", actual.ID)
 	})
 }
 
@@ -188,7 +190,7 @@ func TestEventSourceDropConnectionCanReconnect(t *testing.T) {
 	})
 }
 
-func TestEventSourceLastEventIDHeaderOnReconnecting(t *testing.T) {
+func TestEventSource_LastEventID_headerIsSent(t *testing.T) {
 	runTest(t, func(handler *testutils.TestServerHandler) {
 		handler.MaxRequestsToProcess = 2
 		es, err := New(handler.URL)
