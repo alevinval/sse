@@ -336,6 +336,7 @@ func newMessageEventString(lastEventID, name string, dataSize int) string {
 func getEventAsString(ev *base.MessageEvent) string {
 	out := new(bytes.Buffer)
 	e := encoder.New(out)
+	e.WriteComment("sending test event")
 
 	if ev.HasID {
 		if ev.ID != "" {

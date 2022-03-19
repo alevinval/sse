@@ -74,3 +74,12 @@ func (e *Encoder) WriteID(id string) {
 	e.buf.WriteByte('\n')
 	e.out.Write(e.buf.Bytes())
 }
+
+// WriteComment encodes a comment. These are ignored by the decoder.
+func (e *Encoder) WriteComment(comment string) {
+	e.buf.Reset()
+	e.buf.WriteByte(':')
+	e.buf.WriteString(comment)
+	e.buf.WriteByte('\n')
+	e.out.Write(e.buf.Bytes())
+}

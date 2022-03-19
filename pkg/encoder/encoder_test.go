@@ -34,21 +34,27 @@ func TestEncoder_WriteEvent_encodesFullEvent(t *testing.T) {
 }
 
 func TestEncoder_WriteRetry_encodesRetry(t *testing.T) {
-	e, out := getEncoderAndOut()
-	e.WriteRetry(123)
+	sut, out := getEncoderAndOut()
+	sut.WriteRetry(123)
 	assert.Equal(t, "retry: 123\n", out.String())
 }
 
 func TestEncoder_WriteID_encodesEmptyID(t *testing.T) {
-	e, out := getEncoderAndOut()
-	e.WriteID("")
+	sut, out := getEncoderAndOut()
+	sut.WriteID("")
 	assert.Equal(t, "id\n", out.String())
 }
 
 func TestEncoder_WriteID_encodesID(t *testing.T) {
-	e, out := getEncoderAndOut()
-	e.WriteID("some id")
+	sut, out := getEncoderAndOut()
+	sut.WriteID("some id")
 	assert.Equal(t, "id: some id\n", out.String())
+}
+
+func TestEncoder_WriteComment_encodesCommentary(t *testing.T) {
+	sut, out := getEncoderAndOut()
+	sut.WriteComment("this is a commentary")
+	assert.Equal(t, ":this is a commentary\n", out.String())
 }
 
 func BenchmarkEncodeEmptyEvent(b *testing.B) {
