@@ -1,3 +1,12 @@
+.PHONY: build
+build:
+	go build ./cmd/sse-consume
+
+.PHONY: clean
+clean:
+	go clean ./...
+	rm coverage.out
+	rm sse-consume
 
 .PHONY: test
 test:
