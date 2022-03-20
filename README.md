@@ -56,13 +56,13 @@ The encoder package allows encoding a stream of events
 ```go
 import "github.com/go-rfc/sse/pkg/encoder"
 
-encoder := encoder.New(out)
-encoder.WriteRetry(1000)
-
-event := &sse.MessageEvent{
-    ID: "some id",
+event := &base.MessageEvent{
+    ID:   "some id",
     Name: "stock-update",
     Data: "AAPL 30.09",
 }
-encoder.WriteEvent(event)
+
+sut.WriteComment("example event")
+sut.WriteRetry(1000)
+sut.WriteEvent(event)
 ```
