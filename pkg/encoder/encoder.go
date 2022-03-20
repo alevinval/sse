@@ -36,7 +36,7 @@ func (e *Encoder) WriteEvent(event base.MessageEventGetter) (int, error) {
 	}
 
 	if event.GetName() != "" {
-		e.buf.WriteString("name: ")
+		e.buf.WriteString("event: ")
 		e.buf.WriteString(event.GetName())
 		e.buf.WriteByte('\n')
 	}

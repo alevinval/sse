@@ -18,19 +18,19 @@ var (
 func TestEncoder_WriteEvent_encodesName(t *testing.T) {
 	sut, out := getEncoderAndOut()
 	sut.WriteEvent(eventName)
-	assert.Equal(t, "name: first\n\n", out.String())
+	assert.Equal(t, "event: first\n\n", out.String())
 }
 
 func TestEncoder_WriteEvent_encodesNameAndID(t *testing.T) {
 	sut, out := getEncoderAndOut()
 	sut.WriteEvent(eventNameAndID)
-	assert.Equal(t, "id: 1\nname: first\n\n", out.String())
+	assert.Equal(t, "id: 1\nevent: first\n\n", out.String())
 }
 
 func TestEncoder_WriteEvent_encodesFullEvent(t *testing.T) {
 	sut, out := getEncoderAndOut()
 	sut.WriteEvent(eventFull)
-	assert.Equal(t, "id: 1\nname: first\ndata: some event data\n\n", out.String())
+	assert.Equal(t, "id: 1\nevent: first\ndata: some event data\n\n", out.String())
 }
 
 func TestEncoder_WriteRetry_encodesRetry(t *testing.T) {
