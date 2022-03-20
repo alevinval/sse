@@ -1,357 +1,275 @@
 package eventsource
 
 import (
-	"bytes"
 	"testing"
 	"time"
 
-	"github.com/go-rfc/sse/internal/testutils"
+	"github.com/go-rfc/sse/internal/testutils/server"
 	"github.com/go-rfc/sse/pkg/base"
-	"github.com/go-rfc/sse/pkg/encoder"
 	"github.com/stretchr/testify/assert"
 )
 
-const (
-	contentTypeTextPlain = "text/plain; charset=utf-8"
-	basicAuthUsername    = "foo"
-	basicAuthPassword    = "bar"
-)
+func TestEventSource_WhenConnect_ThenNoError(t *testing.T) {
+	setUp(t, func(handler *server.MockHandler) {
+		sut, err := New(handler.URL)
+		defer sut.Close()
 
-func TestEventSourceStates(t *testing.T) {
-	for _, test := range []struct {
-		stateNumber   byte
-		expectedState ReadyState
-	}{
-		{0, Connecting},
-		{1, Open},
-		{2, Closed},
-	} {
-		assert.Equal(t, test.expectedState, ReadyState(test.stateNumber))
-	}
-}
-
-func TestEventSourceConnectAndClose(t *testing.T) {
-	runTest(t, func(handler *testutils.TestServerHandler) {
-		url := handler.URL
-		es, err := New(url)
-
-		assert.Nil(t, err)
-		assert.Equal(t, url, es.URL())
-
-		es.Close()
-		assertStates(t, []ReadyState{Connecting, Open, Closed}, es.ReadyState())
+		assert.NoError(t, err)
 	})
 }
 
-func TestEventSourceConnectAndCloseThenReceive(t *testing.T) {
-	runTest(t, func(handler *testutils.TestServerHandler) {
-		url := handler.URL
-		es, err := New(url)
+func TestEventSource_WhenURL_ThenMatches(t *testing.T) {
+	setUp(t, func(handler *server.MockHandler) {
+		sut, _ := New(handler.URL)
+		defer sut.Close()
 
-		assert.Nil(t, err)
-		es.Close()
+		assert.Equal(t, handler.URL, sut.URL())
+	})
+}
 
-		_, ok := <-es.MessageEvents()
+func TestEventSource_WhenConnectAndClose_ThenReadyStatesMatch(t *testing.T) {
+	setUp(t, func(handler *server.MockHandler) {
+		sut, _ := New(handler.URL)
+
+		<-handler.Connected
+		sut.Close()
+
+		assertStates(t, []ReadyState{Connecting, Open, Closed}, sut)
+	})
+}
+
+func TestEventSource_WhenClose_ThenChannelIsClosed(t *testing.T) {
+	setUp(t, func(handler *server.MockHandler) {
+		sut, _ := New(handler.URL)
+		sut.Close()
+
+		_, ok := <-sut.MessageEvents()
 		assert.False(t, ok)
 	})
 }
 
-func TestEventSourceWithInvalidContentType(t *testing.T) {
-	runTest(t, func(handler *testutils.TestServerHandler) {
-		handler.ContentType = contentTypeTextPlain
-		es, err := New(handler.URL)
+func TestEventSource_WhenInvalidContentType_ThenReturnsError(t *testing.T) {
+	setUp(t, func(handler *server.MockHandler) {
+		handler.ContentType = "text/plain; charset=utf-8"
+		sut, err := New(handler.URL)
+		defer sut.Close()
 
 		assert.Equal(t, ErrContentType, err)
-		assertStates(t, []ReadyState{Connecting, Closed}, es.ReadyState())
+		assertStates(t, []ReadyState{Connecting, Closed}, sut)
 	})
 }
 
-func TestEventSourceConnectWriteAndReceiveShortEvent(t *testing.T) {
-	runTest(t, func(handler *testutils.TestServerHandler) {
-		es, err := New(handler.URL)
-		assert.Nil(t, err)
+func TestEventSource_WhenReceiveEvent_ThenEventIsReceived(t *testing.T) {
+	expected := &base.MessageEvent{
+		ID:   "event-id",
+		Name: "event-name",
+		Data: "event-data",
+	}
+	setUp(t, func(handler *server.MockHandler) {
+		sut, _ := New(handler.URL)
+		defer sut.Close()
 
-		expectedEv := testutils.NewMessageEvent("", "", 128)
-		go handler.SendAndClose(getEventAsString(expectedEv))
+		handler.WriteEvent(expected)
 
-		ev, ok := <-es.MessageEvents()
-		assert.True(t, ok)
-		assert.Equal(t, expectedEv.Data, ev.Data)
+		assertReceive(t, sut, expected)
 	})
 }
 
-func TestEventSourceConnectWriteAndReceiveLongEvent(t *testing.T) {
-	runTest(t, func(handler *testutils.TestServerHandler) {
-		es, err := New(handler.URL)
-		assert.Nil(t, err)
+func TestEventSource_WhenMultipleWrites_ThenKeepsLastEventID(t *testing.T) {
+	eventWithID := &base.MessageEvent{
+		ID: "event-id",
+	}
+	eventWithoutID := &base.MessageEvent{
+		Data: "event-data",
+	}
+	setUp(t, func(handler *server.MockHandler) {
+		handler.MaxRequestsToProcess = 2
+		sut, _ := New(handler.URL)
+		defer sut.Close()
 
-		expectedEv := testutils.NewMessageEvent("", "", 128)
-		go handler.SendAndClose(getEventAsString(expectedEv))
+		<-handler.Connected
+		handler.WriteRetry(1)
+		handler.WriteEvent(eventWithID)
+		assertReceive(t, sut, eventWithID)
+		assert.Equal(t, "event-id", sut.lastEventID)
 
-		ev, ok := <-es.MessageEvents()
-		assert.True(t, ok)
-		assert.Equal(t, expectedEv.Data, ev.Data)
+		// Force reconnection, which should set Last-Event-ID header
+		handler.CloseActiveRequest(true)
+		<-handler.Connected
+
+		handler.WriteEvent(eventWithoutID)
+		assertReceive(t, sut, eventWithoutID)
+		assert.Equal(t, "event-id", sut.lastEventID)
 	})
 }
 
-func TestEventSource_keepsLastEventID(t *testing.T) {
-	runTest(t, func(handler *testutils.TestServerHandler) {
-		es, err := New(handler.URL)
-		assert.Nil(t, err)
+func TestEventSource_WhenMultipleWrites_ThenResetsLastEventID(t *testing.T) {
+	eventWithID := &base.MessageEvent{
+		ID: "event-id",
+	}
+	eventWithEmptyID := &base.MessageEvent{
+		Data:  "event-data",
+		HasID: true,
+	}
+	setUp(t, func(handler *server.MockHandler) {
+		sut, _ := New(handler.URL)
+		defer sut.Close()
 
-		expectedLastEventID := "123"
-		expectedEvent := &base.MessageEvent{
-			ID: expectedLastEventID,
-		}
-		go handler.SendWithID(getEventAsString(expectedEvent), expectedLastEventID)
+		<-handler.Connected
+		handler.WriteEvent(eventWithID)
+		assertReceive(t, sut, eventWithID)
+		assert.Equal(t, "event-id", sut.lastEventID)
 
-		_, ok := <-es.MessageEvents()
-		if assert.True(t, ok) {
-			assert.Equal(t, expectedLastEventID, es.lastEventID)
-		}
-
-		expectedEvent = &base.MessageEvent{
-			Data: "data",
-		}
-		go handler.SendWithID(getEventAsString(expectedEvent), expectedEvent.ID)
-
-		_, ok = <-es.MessageEvents()
-		if assert.True(t, ok) {
-			assert.Equal(t, expectedLastEventID, es.lastEventID)
-		}
+		handler.WriteEvent(eventWithEmptyID)
+		assertReceive(t, sut, eventWithEmptyID)
+		assert.Equal(t, "", sut.lastEventID)
 	})
 }
 
-func TestEventSource_resetsLastEventID(t *testing.T) {
-	runTest(t, func(handler *testutils.TestServerHandler) {
-		es, err := New(handler.URL)
-		assert.Nil(t, err)
-
-		expectedLastEventID := "123"
-		expectedEvent := &base.MessageEvent{
-			ID: expectedLastEventID,
-		}
-		go handler.SendWithID(getEventAsString(expectedEvent), expectedLastEventID)
-
-		_, ok := <-es.MessageEvents()
-		if assert.True(t, ok) {
-			assert.Equal(t, expectedLastEventID, es.lastEventID)
-		}
-
-		expectedEvent = &base.MessageEvent{
-			Data:  "data",
-			HasID: true,
-		}
-		go handler.SendWithID(getEventAsString(expectedEvent), expectedEvent.ID)
-
-		_, ok = <-es.MessageEvents()
-		if assert.True(t, ok) {
-			assert.Equal(t, "", es.lastEventID)
-		}
-	})
-}
-
-func TestEventSource_retryIsRespected(t *testing.T) {
-	runTest(t, func(handler *testutils.TestServerHandler) {
+func TestEventSource_WhenReconnecting_RetryIsRespected(t *testing.T) {
+	longDelay := 50 * time.Millisecond
+	shortDelay := 1 * time.Millisecond
+	setUp(t, func(handler *server.MockHandler) {
 		handler.MaxRequestsToProcess = 3
 
-		es, err := New(handler.URL)
-		assert.Nil(t, err)
+		sut, _ := New(handler.URL)
+		defer sut.Close()
 
-		handler.SendAndClose(getRetryAsString(100))
-		go handler.Send(newMessageEventString("", "", 128))
-		select {
-		case _, ok := <-es.MessageEvents():
-			assert.True(t, ok)
-		case <-time.After(125 * time.Millisecond):
-			assert.Fail(t, "event source did not reconnect within the allowed time.")
-		}
+		<-handler.Connected
+		handler.WriteRetry(int(longDelay.Milliseconds()))
+		handler.CloseActiveRequest(true)
+		assertConnectionWithinDeadline(t, handler, longDelay, 2*longDelay)
 
-		// Smaller retry
-		handler.SendAndClose(getRetryAsString(1))
-		go handler.Send(newMessageEventString("", "", 128))
-		select {
-		case _, ok := <-es.MessageEvents():
-			assert.True(t, ok)
-		case <-time.After(10 * time.Millisecond):
-			assert.Fail(t, "event source did not reconnect within the allowed time.")
-		}
+		handler.WriteRetry(int(shortDelay.Milliseconds()))
+		handler.CloseActiveRequest(true)
+		assertConnectionWithinDeadline(t, handler, shortDelay, longDelay)
 
 		assertStates(
 			t,
 			[]ReadyState{Connecting, Open, Connecting, Open, Connecting, Open},
-			es.ReadyState(),
+			sut,
 		)
 	})
 }
 
-func TestEventSourceDropConnectionCannotReconnect(t *testing.T) {
-	runTest(t, func(handler *testutils.TestServerHandler) {
-		es, err := New(handler.URL)
-		assert.Nil(t, err)
+func TestEventSource_WhenConnectionDropped_CannotReconnect(t *testing.T) {
+	setUp(t, func(handler *server.MockHandler) {
+		sut, _ := New(handler.URL)
+		defer sut.Close()
 
-		handler.CloseActiveRequest()
+		<-handler.Connected
+		handler.WriteRetry(1)
+		handler.CloseActiveRequest(true)
 
-		_, ok := <-es.MessageEvents()
-		assert.False(t, ok)
+		assertNoReceives(t, sut)
 		assertStates(
 			t,
 			[]ReadyState{Connecting, Open, Connecting, Open, Closed},
-			es.ReadyState(),
+			sut,
 		)
-
 	})
 }
 
-func TestEventSourceDropConnectionCanReconnect(t *testing.T) {
-	runTest(t, func(handler *testutils.TestServerHandler) {
+func TestEventSource_DropConnection_CanReconnect(t *testing.T) {
+	setUp(t, func(handler *server.MockHandler) {
 		handler.MaxRequestsToProcess = 2
-		es, err := New(handler.URL)
-		assert.Nil(t, err)
+		sut, _ := New(handler.URL)
+		defer sut.Close()
 
-		handler.CloseActiveRequest()
-		time.Sleep(25 * time.Millisecond)
-		go handler.Send(newMessageEventString("", "", 128))
-		_, ok := <-es.MessageEvents()
-		assert.True(t, ok)
+		<-handler.Connected
+		handler.WriteRetry(1)
+		handler.CloseActiveRequest(true)
+		<-handler.Connected
+
 		assertStates(
 			t,
 			[]ReadyState{Connecting, Open, Connecting, Open},
-			es.ReadyState(),
+			sut,
 		)
 	})
 }
 
-func TestEventSource_LastEventID_headerIsSent(t *testing.T) {
-	runTest(t, func(handler *testutils.TestServerHandler) {
-		handler.MaxRequestsToProcess = 2
-		es, err := New(handler.URL)
-		assert.Nil(t, err)
+func TestEventSource_WithBasicAuth(t *testing.T) {
+	setUp(t, func(handler *server.MockHandler) {
+		handler.BasicAuth.Username = "foo"
+		handler.BasicAuth.Password = "bar"
 
-		handler.Send(getRetryAsString(1))
+		sut, _ := New(handler.URL, WithBasicAuth("foo", "bar"))
+		defer sut.Close()
 
-		// After closing, we retry and can poll the second message
-		go handler.SendAndCloseWithID(newMessageEventString("first", "", 128), "first")
-		_, ok := <-es.MessageEvents()
-		assert.True(t, ok)
-		assert.Equal(t, "first", es.lastEventID)
-
-		go handler.SendWithID(newMessageEventString("second", "", 128), "second")
-		_, ok = <-es.MessageEvents()
-		assert.True(t, ok)
-		assert.Equal(t, "second", es.lastEventID)
+		<-handler.Connected
 	})
 }
 
-func TestEventSource_LastEventID_headerIsReset(t *testing.T) {
-	runTest(t, func(handler *testutils.TestServerHandler) {
-		handler.MaxRequestsToProcess = 2
-		es, err := New(handler.URL)
-		assert.Nil(t, err)
+func TestEventSource_WithBasicAuth_InvalidPassword(t *testing.T) {
+	setUp(t, func(handler *server.MockHandler) {
+		handler.BasicAuth.Username = "foo"
+		handler.BasicAuth.Password = "bar"
 
-		handler.Send(getRetryAsString(1))
-
-		// After closing, we retry and can poll the second message
-		go handler.SendAndCloseWithID(newMessageEventString("first", "", 128), "first")
-		<-es.MessageEvents()
-		assert.Equal(t, "first", es.lastEventID)
-
-		ev := &base.MessageEvent{
-			HasID: true,
-			Name:  "name",
-			Data:  "data",
-		}
-		go handler.SendWithID(getEventAsString(ev), "second")
-		<-es.MessageEvents()
-
-		assert.Equal(t, "", es.lastEventID)
-	})
-}
-
-func TestEventSourceWithBasicAuth(t *testing.T) {
-	runTest(t, func(handler *testutils.TestServerHandler) {
-		handler.BasicAuth.Username = basicAuthUsername
-		handler.BasicAuth.Password = basicAuthPassword
-
-		url := handler.URL
-		es, err := New(url, WithBasicAuth("foo", "bar"))
-
-		assert.Nil(t, err)
-		es.Close()
-
-		_, ok := <-es.MessageEvents()
-		assert.False(t, ok)
-	})
-}
-
-func TestEventSourceWithBasicAuthInvalidPassword(t *testing.T) {
-	runTest(t, func(handler *testutils.TestServerHandler) {
-		handler.BasicAuth.Username = basicAuthUsername
-		handler.BasicAuth.Password = basicAuthPassword
-
-		url := handler.URL
-		es, err := New(url, WithBasicAuth("foo", ""))
+		sut, err := New(handler.URL, WithBasicAuth("foo", ""))
+		defer sut.Close()
 
 		assert.Equal(t, ErrUnauthorized, err)
-		es.Close()
-
-		_, ok := <-es.MessageEvents()
-		assert.False(t, ok)
 	})
 }
 
-func assertStates(t *testing.T, expected []ReadyState, states <-chan Status) {
-	actual := collectStates(states)
-	assert.Equal(t, expected, actual)
+func setUp(t *testing.T, test func(*server.MockHandler)) {
+	handler := server.NewMockHandler(t)
+	defer handler.Close()
+
+	test(handler)
+}
+
+func assertNoReceives(t *testing.T, sut *EventSource) {
+	_, ok := <-sut.MessageEvents()
+	assert.False(t, ok, "expected no received, instead a received happened")
+}
+
+func assertReceive(t *testing.T, sut *EventSource, expected *base.MessageEvent) {
+	actual, ok := <-sut.MessageEvents()
+	if assert.True(t, ok, "expected to receive an event") {
+		assert.Equal(t, expected.ID, actual.ID, "expected event id to match")
+		assert.Equal(t, expected.Name, actual.Name, "expected event name to match")
+		assert.Equal(t, expected.Data, actual.Data, "expected event data to match")
+	}
+}
+
+func assertConnectionWithinDeadline(t *testing.T, handler *server.MockHandler, minDeadline, maxDeadline time.Duration) {
+	start := time.Now()
+	select {
+	case <-handler.Connected:
+		elapsed := time.Since(start)
+		if elapsed < minDeadline {
+			assert.Failf(t, "event source reconnected earlier than expected", "elapsed: %s", elapsed.String())
+		}
+	case <-time.After(maxDeadline):
+		elapsed := time.Since(start)
+		assert.Fail(t, "event source did not reconnect within the allowed time.", "elapsed: %s", elapsed.String())
+	}
+}
+
+func assertStates(t *testing.T, expected []ReadyState, es *EventSource) {
+	actual := collectStates(es.ReadyState())
+	assert.Equal(t, stateToString(expected), stateToString(actual))
 }
 
 func collectStates(states <-chan Status) []ReadyState {
 	list := []ReadyState{}
-	poll := true
-	for poll {
+	for {
 		select {
 		case status := <-states:
 			list = append(list, status.ReadyState)
-		case <-time.After(250 * time.Millisecond):
-			poll = false
+			break
+		case <-time.After(10 * time.Millisecond):
+			return list
 		}
+	}
+}
+
+func stateToString(states []ReadyState) []string {
+	list := []string{}
+	for _, state := range states {
+		list = append(list, state.String())
 	}
 	return list
-}
-
-type testFn = func(*testutils.TestServerHandler)
-
-func runTest(t *testing.T, test testFn) {
-	server := testutils.NewDefaultTestServerHandler(t)
-	defer server.Close()
-
-	test(server)
-}
-
-func newMessageEventString(lastEventID, name string, dataSize int) string {
-	ev := testutils.NewMessageEvent(lastEventID, name, dataSize)
-	return getEventAsString(ev)
-}
-
-func getEventAsString(ev *base.MessageEvent) string {
-	out := new(bytes.Buffer)
-	e := encoder.New(out)
-	e.WriteComment("sending test event")
-
-	if ev.HasID {
-		if ev.ID != "" {
-			panic("do not set HasID if the ID is not empty")
-		}
-		e.WriteID("")
-	}
-
-	e.WriteEvent(ev)
-	return out.String()
-}
-
-func getRetryAsString(retryInMilliseconds int) string {
-	out := new(bytes.Buffer)
-	e := encoder.New(out)
-	e.WriteRetry(retryInMilliseconds)
-	return out.String()
 }
