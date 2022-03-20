@@ -2,161 +2,156 @@ package decoder
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"testing"
 	"time"
 
 	"github.com/go-rfc/sse/internal/testutils"
-	"github.com/go-rfc/sse/pkg/base"
 	"github.com/go-rfc/sse/pkg/encoder"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestEOFIsReturned(t *testing.T) {
-	decoder := newDecoder("")
-	ev, err := decoder.Decode()
+func TestDecoder_EmptyInput_ReturnsEOF(t *testing.T) {
+	sut := newDecoder("")
+	_, err := sut.Decode()
 	assert.Equal(t, io.EOF, err)
-	assert.Nil(t, ev)
 }
 
-func TestBigEventGrowsTheBuffer(t *testing.T) {
-	expectedEv := testutils.NewMessageEvent("", "", 32000)
-	decoder := newDecoder(getMessageEventAsString(expectedEv))
+func TestDecoder_EventEmptyID(t *testing.T) {
+	sut := newDecoder("id\r\n\n")
 
-	ev, err := decoder.Decode()
+	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, expectedEv.ID, ev.ID)
-		assert.Equal(t, expectedEv.Name, ev.Name)
-		assert.Equal(t, expectedEv.Data, ev.Data)
+		assert.Equal(t, "", actual.ID)
+		assert.True(t, actual.HasID)
 	}
 }
 
-func TestEventNameAndData(t *testing.T) {
-	decoder := newDecoder("event: some event\r\ndata: some event value\r\n\n")
+func TestDecoder_EventID(t *testing.T) {
+	sut := newDecoder("id: event-id\r\n\n")
 
-	ev, err := decoder.Decode()
+	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "some event", ev.Name)
-		assert.Equal(t, "some event value", ev.Data)
+		assert.Equal(t, "event-id", actual.ID)
+		assert.True(t, actual.HasID)
 	}
 }
 
-func TestEventNameAndDataManyEvents(t *testing.T) {
-	decoder := newDecoder("event: first event\r\ndata: first value\r\n\nevent: second event\r\ndata: second value\r\n\n")
+func TestDecoder_EventID_IgnoresNullCharacter(t *testing.T) {
+	sut := newDecoder("data: test\nid: invalid id \u0000\n\n")
 
-	ev1, err := decoder.Decode()
+	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.NotNil(t, ev1)
-		assert.Equal(t, "first event", ev1.Name)
-		assert.Equal(t, "first value", ev1.Data)
-	}
-
-	ev2, err := decoder.Decode()
-	if assert.NoError(t, err) {
-		assert.NotNil(t, ev2)
-		assert.Equal(t, "second event", ev2.Name)
-		assert.Equal(t, "second value", ev2.Data)
+		assert.Equal(t, "", actual.ID)
+		assert.False(t, actual.HasID)
 	}
 }
 
-func TestStocksExample(t *testing.T) {
-	decoder := newDecoder("data: YHOO\ndata: +2\ndata: 10\n\n")
-	ev, err := decoder.Decode()
+func TestDecoder_EventName(t *testing.T) {
+	sut := newDecoder("event: event-name\r\n\n")
+
+	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "", ev.ID)
-		assert.Equal(t, "YHOO\n+2\n10", ev.Data)
+		assert.Equal(t, "event-name", actual.Name)
+		assert.False(t, actual.HasID)
 	}
 }
 
-func TestFirstWhitespaceIsIgnored(t *testing.T) {
-	decoder := newDecoder("data: first\n\ndata: second\n\n")
+func TestDecoder_EventData(t *testing.T) {
+	sut := newDecoder("id: event-id\nevent: event-name\r\ndata: event-data\r\n\n")
 
-	ev1, err := decoder.Decode()
+	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "first", ev1.Data)
-	}
-
-	ev2, err := decoder.Decode()
-	if assert.NoError(t, err) {
-		assert.Equal(t, "second", ev2.Data)
+		assert.Equal(t, "event-id", actual.ID)
+		assert.Equal(t, "event-name", actual.Name)
+		assert.Equal(t, "event-data", actual.Data)
+		assert.True(t, actual.HasID)
 	}
 }
 
-func TestOnlyOneWhitespaceIsIgnored(t *testing.T) {
-	decoder := newDecoder("data:   first\n\n") // 3 whitespaces
-	ev, err := decoder.Decode()
+func TestDecoder_MultipleEvents(t *testing.T) {
+	sut := newDecoder("id\nevent: first event\r\ndata: first value\r\n\nevent: second event\r\ndata: second value\r\n\n")
+
+	first, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "  first", ev.Data) // 2 whitespaces
+		assert.Equal(t, "first event", first.Name)
+		assert.Equal(t, "first value", first.Data)
+		assert.True(t, first.HasID)
+	}
+
+	second, err := sut.Decode()
+	if assert.NoError(t, err) {
+		assert.Equal(t, "second event", second.Name)
+		assert.Equal(t, "second value", second.Data)
+		assert.False(t, second.HasID)
 	}
 }
 
-func TestEventsWithNoDataThenWithNewLine(t *testing.T) {
-	decoder := newDecoder("data\n\ndata\ndata\n\ndata:")
-
-	ev1, err := decoder.Decode()
+func TestDecoder_StocksExample(t *testing.T) {
+	sut := newDecoder("data: YHOO\ndata: +2\ndata: 10\n\n")
+	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "", ev1.Data)
-	}
-
-	ev2, err := decoder.Decode()
-	if assert.NoError(t, err) {
-		assert.Equal(t, "\n", ev2.Data)
+		assert.Equal(t, "", actual.ID)
+		assert.Equal(t, "YHOO\n+2\n10", actual.Data)
 	}
 }
 
-func TestDecode_LastEventId_returnsId(t *testing.T) {
-	stream := fmt.Sprintf("data: test\nid: valid id\n\n")
-	decoder := newDecoder(stream)
-
-	ev, err := decoder.Decode()
+func TestDecoder_OnlyOneWhitespaceIsIgnored(t *testing.T) {
+	sut := newDecoder("data:   event-data\n\n") // 3 whitespaces
+	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "valid id", ev.ID)
+		assert.Equal(t, "  event-data", actual.Data) // 2 whitespaces
 	}
 }
 
-func TestDecode_LastEventId_ignoresNullCharater(t *testing.T) {
-	stream := fmt.Sprintf("data: test\nid: invalid id \u0000\n\n")
-	decoder := newDecoder(stream)
+func TestDecoder_EventsWithNoDataThenWithNewLine(t *testing.T) {
+	sut := newDecoder("data\n\ndata\ndata\n\ndata:")
 
-	ev, err := decoder.Decode()
+	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "", ev.ID)
+		assert.Equal(t, "", actual.Data)
+	}
+
+	actual, err = sut.Decode()
+	if assert.NoError(t, err) {
+		assert.Equal(t, "\n", actual.Data)
+	}
+
+	_, err = sut.Decode()
+	assert.ErrorIs(t, io.EOF, err)
+}
+func TestDecode_CommentIsIgnoredAndDataIsNot(t *testing.T) {
+	sut := newDecoder(": test stream\n\ndata: first event\nid: 1\n\ndata:second event\nid\n\ndata:  third event\n\n")
+
+	actual, err := sut.Decode()
+	if assert.NoError(t, err) {
+		assert.Equal(t, "1", actual.ID)
+		assert.Equal(t, "first event", actual.Data)
+	}
+
+	actual, err = sut.Decode()
+	if assert.NoError(t, err) {
+		assert.Equal(t, "", actual.ID)
+		assert.Equal(t, "second event", actual.Data)
+	}
+
+	actual, err = sut.Decode()
+	if assert.NoError(t, err) {
+		assert.Equal(t, "", actual.ID)
+		assert.Equal(t, " third event", actual.Data)
 	}
 }
 
-func TestCommentIsIgnoredAndDataIsNot(t *testing.T) {
-	decoder := newDecoder(": test stream\n\ndata: first event\nid: 1\n\ndata:second event\nid\n\ndata:  third event\n\n")
+func TestDecoder_OneLineDataParseWithDoubleRN(t *testing.T) {
+	sut := newDecoder("data: this is a test\r\n\r\n")
 
-	ev1, err := decoder.Decode()
+	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "1", ev1.ID)
-		assert.Equal(t, "first event", ev1.Data)
-	}
-
-	ev2, err := decoder.Decode()
-	if assert.NoError(t, err) {
-		assert.Equal(t, "", ev2.ID)
-		assert.Equal(t, "second event", ev2.Data)
-	}
-
-	ev3, err := decoder.Decode()
-	if assert.NoError(t, err) {
-		assert.Equal(t, "", ev3.ID)
-		assert.Equal(t, " third event", ev3.Data)
+		assert.Equal(t, "this is a test", actual.Data)
 	}
 }
 
-func TestOneLineDataParseWithDoubleRN(t *testing.T) {
-	decoder := newDecoder("data: this is a test\r\n\r\n")
-
-	ev, err := decoder.Decode()
-	if assert.NoError(t, err) {
-		assert.Equal(t, "this is a test", ev.Data)
-	}
-}
-
-func TestOneLineDataParseWithoutDoubleRN(t *testing.T) {
+func TestDecoder_OneLineDataParseWithoutDoubleRN(t *testing.T) {
 	decoder := newDecoder("data: this is a test\r\n\n")
 
 	ev, err := decoder.Decode()
@@ -165,19 +160,19 @@ func TestOneLineDataParseWithoutDoubleRN(t *testing.T) {
 	}
 }
 
-func TestTwoLinesDataParseWithRNAndDoubleRN(t *testing.T) {
-	decoder := newDecoder("data: this is \r\ndata: a test\r\n\r\n")
+func TestDecoder_TwoLinesDataParseWithRNAndDoubleRN(t *testing.T) {
+	sut := newDecoder("data: this is \r\ndata: a test\r\n\r\n")
 
-	ev, err := decoder.Decode()
+	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "this is \na test", ev.Data)
+		assert.Equal(t, "this is \na test", actual.Data)
 	}
 }
 
-func TestNewLineWithCR(t *testing.T) {
-	decoder := newDecoder("event: name\ndata: some\rdata:  data\r\n\n")
+func TestDecoder_NewLineWithCR(t *testing.T) {
+	sut := newDecoder("event: name\ndata: some\rdata:  data\r\n\n")
 
-	ev, err := decoder.Decode()
+	ev, err := sut.Decode()
 	if assert.NoError(t, err) {
 		assert.Equal(t, "name", ev.Name)
 		assert.Equal(t, "some\n data", ev.Data)
@@ -185,52 +180,50 @@ func TestNewLineWithCR(t *testing.T) {
 }
 
 // Bug #4: decoder: pure CR not recognized as end of line #4
-func TestPureLineFeedsWithCarriageReturn(t *testing.T) {
-	decoder := newDecoder("event: name\rdata: some\rdata:  data\r\r")
-	ev, err := decoder.Decode()
+func TestDecoder_PureLineFeedsWithCarriageReturn(t *testing.T) {
+	sut := newDecoder("event: name\rdata: some\rdata:  data\r\r")
+
+	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "name", ev.Name)
-		assert.Equal(t, "some\n data", ev.Data)
+		assert.Equal(t, "name", actual.Name)
+		assert.Equal(t, "some\n data", actual.Data)
 	}
 }
 
-func TestDecodeRetry(t *testing.T) {
-	decoder := New(bytes.NewReader([]byte("retry: 100\nretry: a\n")))
-	_, err := decoder.Decode()
-	assert.Equal(t, time.Duration(100)*time.Millisecond, decoder.Retry())
-	assert.Equal(t, io.EOF, err)
+func TestDecoder_Retry(t *testing.T) {
+	sut := newDecoder("retry: 100\nretry: a\n")
+
+	_, err := sut.Decode()
+	assert.ErrorIs(t, io.EOF, err)
+	assert.Equal(t, 100*time.Millisecond, sut.Retry())
 }
 
 func BenchmarkDecodeEmptyEvent(b *testing.B) {
-	runDecodingBenchmark(b, "data: \n\n")
+	runDecodingBenchmark(b, []byte("data: \n\n"))
 }
 
 func BenchmarkDecodeEmptyEventWithIgnoredLine(b *testing.B) {
-	runDecodingBenchmark(b, ":ignored line \n\ndata: \n\n")
+	runDecodingBenchmark(b, []byte(":ignored line \n\ndata: \n\n"))
 }
 
 func BenchmarkDecodeShortEvent(b *testing.B) {
-	runDecodingBenchmark(b, "data: short event\n\n")
+	runDecodingBenchmark(b, []byte("data: short event\n\n"))
 }
 
 func BenchmarkDecode1kEvent(b *testing.B) {
-	ev := testutils.NewMessageEvent("", "", 1000)
-	runDecodingBenchmark(b, getMessageEventAsString(ev))
+	runDecodingBenchmark(b, getBenchmarkPayload(1000))
 }
 
 func BenchmarkDecode4kEvent(b *testing.B) {
-	ev := testutils.NewMessageEvent("", "", 4000)
-	runDecodingBenchmark(b, getMessageEventAsString(ev))
+	runDecodingBenchmark(b, getBenchmarkPayload(4000))
 }
 
 func BenchmarkDecode8kEvent(b *testing.B) {
-	ev := testutils.NewMessageEvent("", "", 8000)
-	runDecodingBenchmark(b, getMessageEventAsString(ev))
+	runDecodingBenchmark(b, getBenchmarkPayload(8000))
 }
 
 func BenchmarkDecode16kEvent(b *testing.B) {
-	ev := testutils.NewMessageEvent("", "", 16000)
-	runDecodingBenchmark(b, getMessageEventAsString(ev))
+	runDecodingBenchmark(b, getBenchmarkPayload(16000))
 }
 
 func newDecoder(data string) *Decoder {
@@ -238,19 +231,24 @@ func newDecoder(data string) *Decoder {
 	return New(reader)
 }
 
-func runDecodingBenchmark(b *testing.B, data string) {
-	reader := bytes.NewReader([]byte(data))
-	b.ResetTimer()
+func runDecodingBenchmark(b *testing.B, data []byte) {
+	reader := bytes.NewReader(data)
 	decoder := New(reader)
+
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		decoder.Decode()
 		reader.Seek(0, 0)
 	}
 }
 
-func getMessageEventAsString(ev *base.MessageEvent) string {
+func getBenchmarkPayload(dataSize int) []byte {
+	event := testutils.NewMessageEvent("event-id", "event-name", dataSize)
 	out := new(bytes.Buffer)
+
 	e := encoder.New(out)
-	e.WriteEvent(ev)
-	return out.String()
+	e.WriteComment("benchmark event")
+	e.WriteRetry(2000)
+	e.WriteEvent(event)
+	return out.Bytes()
 }

@@ -10,15 +10,15 @@ cover:
 
 .PHONY: bench-old
 bench-old:
-	go test -bench=. -count=5 ./... > old.txt
+	go test -cpu=8 -benchtime=1s -bench=. -benchmem -count=5 ./... > old.txt
 
 .PHONY: bench-new
 bench-new:
-	go test -bench=. -count=5 ./... > new.txt
+	go test -cpu=8 -benchtime=1s -bench=. -benchmem -count=5 ./... > new.txt
 
 .PHONY: bench-compare
 bench-compare:
-	benchtat old.txt new.txt
+	benchstat old.txt new.txt
 
 .PHONY: mod-update
 mod-update:

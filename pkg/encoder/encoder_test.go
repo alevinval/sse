@@ -9,95 +9,109 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var (
-	eventName      = &base.MessageEvent{Name: "first"}
-	eventNameAndID = &base.MessageEvent{ID: "1", Name: "first"}
-	eventFull      = &base.MessageEvent{ID: "1", Name: "first", Data: "some event data"}
-)
+func TestEncoder_WriteEvent_EncodesName(t *testing.T) {
+	event := &base.MessageEvent{Name: "event-name"}
+	sut, out := getEncoder()
 
-func TestEncoder_WriteEvent_encodesName(t *testing.T) {
-	sut, out := getEncoderAndOut()
-	sut.WriteEvent(eventName)
-	assert.Equal(t, "event: first\n\n", out.String())
+	sut.WriteEvent(event)
+
+	assert.Equal(t, "event: event-name\n\n", out.String())
 }
 
-func TestEncoder_WriteEvent_encodesNameAndID(t *testing.T) {
-	sut, out := getEncoderAndOut()
-	sut.WriteEvent(eventNameAndID)
-	assert.Equal(t, "id: 1\nevent: first\n\n", out.String())
+func TestEncoder_WriteEvent_EncodesID(t *testing.T) {
+	event := &base.MessageEvent{ID: "event-id"}
+	sut, out := getEncoder()
+
+	sut.WriteEvent(event)
+
+	assert.Equal(t, "id: event-id\n\n", out.String())
 }
 
-func TestEncoder_WriteEvent_encodesFullEvent(t *testing.T) {
-	sut, out := getEncoderAndOut()
-	sut.WriteEvent(eventFull)
-	assert.Equal(t, "id: 1\nevent: first\ndata: some event data\n\n", out.String())
+func TestEncoder_WriteEvent_EncodesData(t *testing.T) {
+	event := &base.MessageEvent{Data: "event-data"}
+	sut, out := getEncoder()
+
+	sut.WriteEvent(event)
+
+	assert.Equal(t, "data: event-data\n\n", out.String())
 }
 
-func TestEncoder_WriteRetry_encodesRetry(t *testing.T) {
-	sut, out := getEncoderAndOut()
+func TestEncoder_WriteEvent_EncodesFullEvent(t *testing.T) {
+	event := &base.MessageEvent{ID: "event-id", Name: "event-name", Data: "event-data"}
+	sut, out := getEncoder()
+
+	sut.WriteEvent(event)
+
+	assert.Equal(t, "id: event-id\nevent: event-name\ndata: event-data\n\n", out.String())
+}
+
+func TestEncoder_WriteRetry_EncodesRetry(t *testing.T) {
+	sut, out := getEncoder()
+
 	sut.WriteRetry(123)
+
 	assert.Equal(t, "retry: 123\n", out.String())
 }
 
-func TestEncoder_WriteID_encodesEmptyID(t *testing.T) {
-	sut, out := getEncoderAndOut()
+func TestEncoder_WriteID_EncodesEmptyID(t *testing.T) {
+	sut, out := getEncoder()
 	sut.WriteID("")
 	assert.Equal(t, "id\n", out.String())
 }
 
-func TestEncoder_WriteID_encodesID(t *testing.T) {
-	sut, out := getEncoderAndOut()
+func TestEncoder_WriteID_EncodesID(t *testing.T) {
+	sut, out := getEncoder()
 	sut.WriteID("some id")
 	assert.Equal(t, "id: some id\n", out.String())
 }
 
-func TestEncoder_WriteComment_encodesCommentary(t *testing.T) {
-	sut, out := getEncoderAndOut()
+func TestEncoder_WriteComment_EncodesCommentary(t *testing.T) {
+	sut, out := getEncoder()
+
 	sut.WriteComment("this is a commentary")
+
 	assert.Equal(t, ":this is a commentary\n", out.String())
 }
 
-func BenchmarkEncodeEmptyEvent(b *testing.B) {
-	ev := &base.MessageEvent{}
-	runEncodingBenchmark(b, ev)
+func getEncoder() (*Encoder, *bytes.Buffer) {
+	out := new(bytes.Buffer)
+	sut := New(out)
+	return sut, out
 }
 
-func BenchmarkEncodeShortEvent(b *testing.B) {
-	ev := &base.MessageEvent{Data: "some relatively short event"}
-	runEncodingBenchmark(b, ev)
+func BenchmarkEncodeEmptyEvent(b *testing.B) {
+	runEncodingBenchmark(b, 0)
+}
+
+func BenchmarkEncode128Event(b *testing.B) {
+	runEncodingBenchmark(b, 128)
+}
+
+func BenchmarkEncode256Event(b *testing.B) {
+	runEncodingBenchmark(b, 256)
+}
+
+func BenchmarkEncode512Event(b *testing.B) {
+	runEncodingBenchmark(b, 512)
 }
 
 func BenchmarkEncode1kEvent(b *testing.B) {
-	ev := testutils.NewMessageEvent("", "", 1000)
-	runEncodingBenchmark(b, ev)
+	runEncodingBenchmark(b, 1024)
 }
 
-func BenchmarkEncode4kEvent(b *testing.B) {
-	ev := testutils.NewMessageEvent("", "", 4000)
-	runEncodingBenchmark(b, ev)
+func BenchmarkEncode2kEvent(b *testing.B) {
+	runEncodingBenchmark(b, 2048)
 }
 
-func BenchmarkEncode8kEvent(b *testing.B) {
-	ev := testutils.NewMessageEvent("", "", 8000)
-	runEncodingBenchmark(b, ev)
-}
-
-func BenchmarkEncode16kEvent(b *testing.B) {
-	ev := testutils.NewMessageEvent("", "", 16000)
-	runEncodingBenchmark(b, ev)
-}
-
-func getEncoderAndOut() (*Encoder, *bytes.Buffer) {
-	out := new(bytes.Buffer)
-	e := New(out)
-	return e, out
-}
-
-func runEncodingBenchmark(b *testing.B, event *base.MessageEvent) {
+func runEncodingBenchmark(b *testing.B, dataSize int) {
+	event := testutils.NewMessageEvent("event-id", "event-name", dataSize)
 	out := new(bytes.Buffer)
 	encoder := New(out)
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		encoder.WriteComment("benchmark event")
+		encoder.WriteRetry(2000)
 		encoder.WriteEvent(event)
 		out.Reset()
 	}
