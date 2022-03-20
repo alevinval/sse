@@ -3,6 +3,7 @@ package eventsource
 import (
 	"errors"
 	"io"
+	"log"
 	"mime"
 	"net/http"
 	"sync"
@@ -172,7 +173,13 @@ func (es *EventSource) consume() {
 		if ev.HasID {
 			es.lastEventID = ev.ID
 		}
-		es.out <- ev
+
+		select {
+		case es.out <- ev:
+		case <-time.After(1 * time.Second):
+			log.Printf("eventsource: slow consumer, message are not being consumed")
+			es.out <- ev
+		}
 	}
 }
 
