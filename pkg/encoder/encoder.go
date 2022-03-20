@@ -21,18 +21,17 @@ func New(out io.Writer) *Encoder {
 }
 
 // WriteEvent encodes a full event.
-//
-// Note: this does not allow resetting the event source LastEventID, because
-// empty IDs are simply ignored, and we cannot distinguish wether the
-// intention of empty string was to reset the ID or to not send any.
-// See WriteID.
 func (e *Encoder) WriteEvent(event base.MessageEventGetter) (int, error) {
 	e.buf.Reset()
 
-	if event.GetID() != "" {
-		e.buf.WriteString("id: ")
-		e.buf.WriteString(event.GetID())
-		e.buf.WriteByte('\n')
+	if id, hasID := event.GetID(); id != "" || hasID {
+		if id == "" {
+			e.buf.WriteString("id\n")
+		} else {
+			e.buf.WriteString("id: ")
+			e.buf.WriteString(id)
+			e.buf.WriteByte('\n')
+		}
 	}
 
 	if event.GetName() != "" {
@@ -57,20 +56,6 @@ func (e *Encoder) WriteRetry(retryDelayInMillis int) {
 	e.buf.Reset()
 	e.buf.WriteString("retry: ")
 	e.buf.WriteString(strconv.Itoa(retryDelayInMillis))
-	e.buf.WriteByte('\n')
-	e.out.Write(e.buf.Bytes())
-}
-
-// WriteID encodes an event id.
-// This can be used to reset the LastEventID of a stream, since empty values
-// on a MessageEvent are ignored, call WriteID to force sending an empty ID.
-func (e *Encoder) WriteID(id string) {
-	e.buf.Reset()
-	e.buf.WriteString("id")
-	if id != "" {
-		e.buf.WriteString(": ")
-		e.buf.WriteString(id)
-	}
 	e.buf.WriteByte('\n')
 	e.out.Write(e.buf.Bytes())
 }

@@ -18,13 +18,31 @@ func TestEncoder_WriteEvent_EncodesName(t *testing.T) {
 	assert.Equal(t, "event: event-name\n\n", out.String())
 }
 
-func TestEncoder_WriteEvent_EncodesID(t *testing.T) {
+func TestEncoder_WriteEvent_EncodesIDWhenHasIDIsFalse(t *testing.T) {
 	event := &base.MessageEvent{ID: "event-id"}
 	sut, out := getEncoder()
 
 	sut.WriteEvent(event)
 
 	assert.Equal(t, "id: event-id\n\n", out.String())
+}
+
+func TestEncoder_WriteEvent_EncodesIDWhenHasIDIsTrue(t *testing.T) {
+	event := &base.MessageEvent{ID: "event-id", HasID: true}
+	sut, out := getEncoder()
+
+	sut.WriteEvent(event)
+
+	assert.Equal(t, "id: event-id\n\n", out.String())
+}
+
+func TestEncoder_WriteEvent_EncodesEmptyID(t *testing.T) {
+	event := &base.MessageEvent{HasID: true}
+	sut, out := getEncoder()
+
+	sut.WriteEvent(event)
+
+	assert.Equal(t, "id\n\n", out.String())
 }
 
 func TestEncoder_WriteEvent_EncodesData(t *testing.T) {
@@ -51,18 +69,6 @@ func TestEncoder_WriteRetry_EncodesRetry(t *testing.T) {
 	sut.WriteRetry(123)
 
 	assert.Equal(t, "retry: 123\n", out.String())
-}
-
-func TestEncoder_WriteID_EncodesEmptyID(t *testing.T) {
-	sut, out := getEncoder()
-	sut.WriteID("")
-	assert.Equal(t, "id\n", out.String())
-}
-
-func TestEncoder_WriteID_EncodesID(t *testing.T) {
-	sut, out := getEncoder()
-	sut.WriteID("some id")
-	assert.Equal(t, "id: some id\n", out.String())
 }
 
 func TestEncoder_WriteComment_EncodesCommentary(t *testing.T) {

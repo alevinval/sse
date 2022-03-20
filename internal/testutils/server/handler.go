@@ -107,13 +107,6 @@ func (h *MockHandler) WriteEvent(event *base.MessageEvent) {
 	}
 
 	h.encoder.WriteComment("sending test event")
-	if event.HasID {
-		if event.ID == "" {
-			h.encoder.WriteID("")
-		} else {
-			panic("do not set HasID if ID is not empty string")
-		}
-	}
 	h.encoder.WriteEvent(event)
 	h.flusher.Flush()
 }

@@ -5,9 +5,9 @@ var _ (MessageEventGetter) = (*MessageEvent)(nil)
 // MessageEventGetter used by the decoder to be able to write any implementation
 // of message event
 type MessageEventGetter interface {
-	GetID() string
-	GetName() string
-	GetData() string
+	GetID() (id string, hasID bool)
+	GetName() (name string)
+	GetData() (data string)
 }
 
 // MessageEvent presents the payload being parsed from an EventSource.
@@ -16,15 +16,15 @@ type MessageEvent struct {
 	Name string
 	Data string
 
-	// HasID is used to signal that the ID has been reset.
-	// This is necessary because we cannot differentiate empty string from
-	// whether it was not sent, or it was sent with empty value.
+	// HasID is used to signal the ID has been explicitly set.
+	// It is not necessary to enable this flag if ID != ""
+	// It must be enabled when ID == ""
 	HasID bool
 }
 
 // GetID returns the ID of the event.
-func (m *MessageEvent) GetID() string {
-	return m.ID
+func (m *MessageEvent) GetID() (id string, hasID bool) {
+	return m.ID, m.HasID
 }
 
 // GetName returns the name of the event.
