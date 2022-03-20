@@ -18,11 +18,10 @@ es, err := eventsource.New("http://foo.com/stocks/AAPL")
 
 for {
     select {
-    case event := <- es.MessageEvents():
-        processEvent(event)
-    case <- es.ReadyState():
-        // You can hook custom logic on ReadyState changes
-        continue
+    case event := <-es.MessageEvents():
+        log.Printf("[Event] ID: %s\n Name: %s\n Data: %s\n\n", event.ID, event.Name, event.Data)
+    case state := <-es.ReadyState():
+        log.Printf("[ReadyState] %s (err=%v)", state.ReadyState, err)
     }
 }
 ```
