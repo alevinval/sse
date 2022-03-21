@@ -22,8 +22,8 @@ func TestDecoder_EventEmptyID(t *testing.T) {
 
 	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "", actual.ID)
-		assert.True(t, actual.HasID)
+		assert.Equal(t, "", actual.ID.Get())
+		assert.True(t, actual.ID.IsPresent())
 	}
 }
 
@@ -32,8 +32,8 @@ func TestDecoder_EventID(t *testing.T) {
 
 	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "event-id", actual.ID)
-		assert.True(t, actual.HasID)
+		assert.Equal(t, "event-id", actual.ID.Get())
+		assert.True(t, actual.ID.IsPresent())
 	}
 }
 
@@ -42,8 +42,7 @@ func TestDecoder_EventID_IgnoresNullCharacter(t *testing.T) {
 
 	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "", actual.ID)
-		assert.False(t, actual.HasID)
+		assert.True(t, actual.ID.IsEmpty())
 	}
 }
 
@@ -53,7 +52,7 @@ func TestDecoder_EventName(t *testing.T) {
 	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
 		assert.Equal(t, "event-name", actual.Name)
-		assert.False(t, actual.HasID)
+		assert.False(t, actual.ID.IsPresent())
 	}
 }
 
@@ -62,10 +61,10 @@ func TestDecoder_EventData(t *testing.T) {
 
 	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "event-id", actual.ID)
+		assert.Equal(t, "event-id", actual.ID.Get())
 		assert.Equal(t, "event-name", actual.Name)
 		assert.Equal(t, "event-data", actual.Data)
-		assert.True(t, actual.HasID)
+		assert.True(t, actual.ID.IsPresent())
 	}
 }
 
@@ -76,14 +75,14 @@ func TestDecoder_MultipleEvents(t *testing.T) {
 	if assert.NoError(t, err) {
 		assert.Equal(t, "first event", first.Name)
 		assert.Equal(t, "first value", first.Data)
-		assert.True(t, first.HasID)
+		assert.True(t, first.ID.IsPresent())
 	}
 
 	second, err := sut.Decode()
 	if assert.NoError(t, err) {
 		assert.Equal(t, "second event", second.Name)
 		assert.Equal(t, "second value", second.Data)
-		assert.False(t, second.HasID)
+		assert.False(t, second.ID.IsPresent())
 	}
 }
 
@@ -91,7 +90,7 @@ func TestDecoder_StocksExample(t *testing.T) {
 	sut := newDecoder("data: YHOO\ndata: +2\ndata: 10\n\n")
 	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "", actual.ID)
+		assert.True(t, actual.ID.IsEmpty())
 		assert.Equal(t, "YHOO\n+2\n10", actual.Data)
 	}
 }
@@ -125,19 +124,19 @@ func TestDecode_CommentIsIgnoredAndDataIsNot(t *testing.T) {
 
 	actual, err := sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "1", actual.ID)
+		assert.Equal(t, "1", actual.ID.Get())
 		assert.Equal(t, "first event", actual.Data)
 	}
 
 	actual, err = sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "", actual.ID)
+		assert.True(t, actual.ID.IsPresent())
 		assert.Equal(t, "second event", actual.Data)
 	}
 
 	actual, err = sut.Decode()
 	if assert.NoError(t, err) {
-		assert.Equal(t, "", actual.ID)
+		assert.True(t, actual.ID.IsEmpty())
 		assert.Equal(t, " third event", actual.Data)
 	}
 }

@@ -44,7 +44,7 @@ func main() {
 	for {
 		select {
 		case event := <-es.MessageEvents():
-			log.Printf("id: %s\nevent: %s\ndata: %s\n\n", event.ID, event.Name, event.Data)
+			log.Printf("id: %s\nevent: %s\ndata: %s\n\n", event.ID.GetOrDefault(""), event.Name, event.Data)
 		case status := <-es.ReadyState():
 			if status.Err == nil {
 				log.Printf("state=%s\n\n", status.ReadyState)

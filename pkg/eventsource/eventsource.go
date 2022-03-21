@@ -170,9 +170,9 @@ func (es *EventSource) consume() {
 			}
 			return
 		}
-		if ev.HasID {
-			es.lastEventID = ev.ID
-		}
+		ev.ID.IfPresent(func(id string) {
+			es.lastEventID = id
+		})
 
 		select {
 		case es.out <- ev:

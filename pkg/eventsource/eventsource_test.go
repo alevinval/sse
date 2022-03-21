@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-rfc/sse/internal/testutils/server"
 	"github.com/go-rfc/sse/pkg/base"
+	"github.com/go-rfc/sse/pkg/base/optional"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -61,7 +62,7 @@ func TestEventSource_WhenInvalidContentType_ThenReturnsError(t *testing.T) {
 
 func TestEventSource_WhenReceiveEvent_ThenEventIsReceived(t *testing.T) {
 	expected := &base.MessageEvent{
-		ID:   "event-id",
+		ID:   optional.Of("event-id"),
 		Name: "event-name",
 		Data: "event-data",
 	}
@@ -77,7 +78,7 @@ func TestEventSource_WhenReceiveEvent_ThenEventIsReceived(t *testing.T) {
 
 func TestEventSource_WhenMultipleWrites_ThenKeepsLastEventID(t *testing.T) {
 	eventWithID := &base.MessageEvent{
-		ID: "event-id",
+		ID: optional.Of("event-id"),
 	}
 	eventWithoutID := &base.MessageEvent{
 		Data: "event-data",
@@ -105,11 +106,11 @@ func TestEventSource_WhenMultipleWrites_ThenKeepsLastEventID(t *testing.T) {
 
 func TestEventSource_WhenMultipleWrites_ThenResetsLastEventID(t *testing.T) {
 	eventWithID := &base.MessageEvent{
-		ID: "event-id",
+		ID: optional.Of("event-id"),
 	}
 	eventWithEmptyID := &base.MessageEvent{
-		Data:  "event-data",
-		HasID: true,
+		Data: "event-data",
+		ID:   optional.OfPresent("", true),
 	}
 	setUp(t, func(handler *server.MockHandler) {
 		sut, _ := New(handler.URL)

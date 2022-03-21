@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-rfc/sse/internal/testutils"
 	"github.com/go-rfc/sse/pkg/base"
+	"github.com/go-rfc/sse/pkg/base/optional"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -19,7 +20,7 @@ func TestEncoder_WriteEvent_EncodesName(t *testing.T) {
 }
 
 func TestEncoder_WriteEvent_EncodesIDWhenHasIDIsFalse(t *testing.T) {
-	event := &base.MessageEvent{ID: "event-id"}
+	event := &base.MessageEvent{ID: optional.Of("event-id")}
 	sut, out := getEncoder()
 
 	sut.WriteEvent(event)
@@ -28,7 +29,7 @@ func TestEncoder_WriteEvent_EncodesIDWhenHasIDIsFalse(t *testing.T) {
 }
 
 func TestEncoder_WriteEvent_EncodesIDWhenHasIDIsTrue(t *testing.T) {
-	event := &base.MessageEvent{ID: "event-id", HasID: true}
+	event := &base.MessageEvent{ID: optional.Of("event-id")}
 	sut, out := getEncoder()
 
 	sut.WriteEvent(event)
@@ -37,7 +38,7 @@ func TestEncoder_WriteEvent_EncodesIDWhenHasIDIsTrue(t *testing.T) {
 }
 
 func TestEncoder_WriteEvent_EncodesEmptyID(t *testing.T) {
-	event := &base.MessageEvent{HasID: true}
+	event := &base.MessageEvent{ID: optional.OfPresent("", true)}
 	sut, out := getEncoder()
 
 	sut.WriteEvent(event)
@@ -55,7 +56,7 @@ func TestEncoder_WriteEvent_EncodesData(t *testing.T) {
 }
 
 func TestEncoder_WriteEvent_EncodesFullEvent(t *testing.T) {
-	event := &base.MessageEvent{ID: "event-id", Name: "event-name", Data: "event-data"}
+	event := &base.MessageEvent{ID: optional.Of("event-id"), Name: "event-name", Data: "event-data"}
 	sut, out := getEncoder()
 
 	sut.WriteEvent(event)

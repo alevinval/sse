@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-rfc/sse/pkg/base"
+	"github.com/go-rfc/sse/pkg/base/optional"
 )
 
 // Default retry time in milliseconds.
@@ -70,10 +71,9 @@ func (d *Decoder) Decode() (*base.MessageEvent, error) {
 				// Decoder does not perform this check, hence it could yield
 				// events that would not be valid in a browser.
 				return &base.MessageEvent{
-					ID:    id,
-					Name:  name,
-					Data:  d.data.String(),
-					HasID: hasID,
+					ID:   optional.OfPresent(id, hasID),
+					Name: name,
+					Data: d.data.String(),
 				}, nil
 			}
 

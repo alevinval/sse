@@ -102,9 +102,9 @@ func (h *MockHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 }
 
 func (h *MockHandler) WriteEvent(event *base.MessageEvent) {
-	if event.ID != "" || event.HasID {
-		h.lastEventID = event.ID
-	}
+	event.ID.IfPresent(func(id string) {
+		h.lastEventID = id
+	})
 
 	h.encoder.WriteComment("sending test event")
 	h.encoder.WriteEvent(event)

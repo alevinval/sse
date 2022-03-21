@@ -2,6 +2,7 @@ package encoder
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"strconv"
 
@@ -24,7 +25,8 @@ func New(out io.Writer) *Encoder {
 func (e *Encoder) WriteEvent(event base.MessageEventGetter) (int, error) {
 	e.buf.Reset()
 
-	if id, hasID := event.GetID(); id != "" || hasID {
+	fmt.Printf("%v", event.GetID())
+	event.GetID().IfPresent(func(id string) {
 		if id == "" {
 			e.buf.WriteString("id\n")
 		} else {
@@ -32,7 +34,7 @@ func (e *Encoder) WriteEvent(event base.MessageEventGetter) (int, error) {
 			e.buf.WriteString(id)
 			e.buf.WriteByte('\n')
 		}
-	}
+	})
 
 	if event.GetName() != "" {
 		e.buf.WriteString("event: ")
