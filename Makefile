@@ -59,3 +59,7 @@ ifneq ($(git_dirty),)
 endif
 	$(MAKE) format
 	$(MAKE) git-clean-check
+
+.PHONY: authors
+authors:
+	scripts/generate-authors.sh
