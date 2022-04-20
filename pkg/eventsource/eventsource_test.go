@@ -12,9 +12,10 @@ import (
 func TestEventSource_WhenConnect_ThenNoError(t *testing.T) {
 	setUp(t, func(handler *server.MockHandler) {
 		sut, err := New(handler.URL)
-		defer sut.Close()
 
 		assert.NoError(t, err)
+
+		sut.Close()
 	})
 }
 
@@ -52,10 +53,11 @@ func TestEventSource_WhenInvalidContentType_ThenReturnsError(t *testing.T) {
 	setUp(t, func(handler *server.MockHandler) {
 		handler.ContentType = "text/plain; charset=utf-8"
 		sut, err := New(handler.URL)
-		defer sut.Close()
 
 		assert.Equal(t, ErrContentType, err)
 		assertStates(t, []ReadyState{Connecting, Closed}, sut)
+
+		sut.Close()
 	})
 }
 
@@ -207,9 +209,9 @@ func TestEventSource_WithBasicAuth_InvalidPassword(t *testing.T) {
 		handler.BasicAuth.Password = "bar"
 
 		sut, err := New(handler.URL, WithBasicAuth("foo", ""))
-		defer sut.Close()
-
 		assert.Equal(t, ErrUnauthorized, err)
+
+		sut.Close()
 	})
 }
 
@@ -259,7 +261,6 @@ func collectStates(states <-chan Status) []ReadyState {
 		select {
 		case status := <-states:
 			list = append(list, status.ReadyState)
-			break
 		case <-time.After(10 * time.Millisecond):
 			return list
 		}
