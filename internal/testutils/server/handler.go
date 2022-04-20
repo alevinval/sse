@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,6 +17,8 @@ const contentTypeEventStream = "text/event-stream; charset=utf-8"
 // MockHandler used to emulate an http server that follows
 // the SSE spec
 type MockHandler struct {
+	sync.Mutex
+
 	// Server instance of the test HTTP server
 	Server *httptest.Server
 
@@ -61,7 +64,7 @@ func NewMockHandler(t *testing.T) *MockHandler {
 
 func (h *MockHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	h.encoder = encoder.New(rw)
-	h.flusher, _ = rw.(http.Flusher)
+	h.setFlusher(rw.(http.Flusher))
 
 	if len(h.BasicAuth.Username) > 0 {
 		username, password, ok := req.BasicAuth()
@@ -90,7 +93,7 @@ func (h *MockHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	h.MaxRequestsToProcess--
-	h.flusher.Flush()
+	h.Flush()
 	h.Connected <- struct{}{}
 
 	select {
@@ -98,7 +101,9 @@ func (h *MockHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	case <-time.After(1 * time.Second):
 		// No test ever should take more than 1 second to run
 		h.t.Log("auto-closing active request after 1s")
+		h.t.FailNow()
 	}
+	h.setFlusher(nil)
 }
 
 func (h *MockHandler) WriteEvent(event *base.MessageEvent) {
@@ -108,16 +113,26 @@ func (h *MockHandler) WriteEvent(event *base.MessageEvent) {
 
 	h.encoder.WriteComment("sending test event")
 	h.encoder.WriteEvent(event)
-	h.flusher.Flush()
+	h.Flush()
 }
 
 func (h *MockHandler) WriteRetry(delayInMillis int) {
 	h.encoder.WriteRetry(delayInMillis)
-	h.flusher.Flush()
+	h.Flush()
+}
+
+func (h *MockHandler) Flush() {
+	h.Lock()
+	defer h.Unlock()
+
+	if h.flusher != nil {
+		h.flusher.Flush()
+	}
 }
 
 // CloseActiveRequest cancels the current request being served
 func (h *MockHandler) CloseActiveRequest(block bool) {
+	h.t.Logf("[closing active request]")
 	if block {
 		h.closer <- struct{}{}
 	} else {
@@ -133,4 +148,11 @@ func (h *MockHandler) CloseActiveRequest(block bool) {
 func (h *MockHandler) Close() {
 	h.CloseActiveRequest(false)
 	h.Server.Close()
+}
+
+func (h *MockHandler) setFlusher(flusher http.Flusher) {
+	h.Lock()
+	defer h.Unlock()
+
+	h.flusher = flusher
 }
