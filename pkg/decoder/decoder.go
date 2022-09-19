@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-rfc/sse/pkg/base"
+	"github.com/alevinval/sse/pkg/base"
 )
 
 // Default retry time in milliseconds.

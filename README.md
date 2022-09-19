@@ -1,18 +1,18 @@
 # Go client for HTML5 Server-Sent Events
 
-[![GoDoc](https://pkg.go.dev/badge/github.com/go-rfc/sse/pkg/eventsource)](https://pkg.go.dev/github.com/go-rfc/sse/pkg/eventsource)
+[![GoDoc](https://pkg.go.dev/badge/github.com/alevinval/sse/pkg/eventsource)](https://pkg.go.dev/github.com/alevinval/sse/pkg/eventsource)
 
 The package provides fast primitives to manipulate Server-Sent Events as
 defined by the [HTML5 spec](https://html.spec.whatwg.org/multipage/server-sent-events.html).
 
-Get the package with `go get github.com/go-rfc/sse`
+Get the package with `go get github.com/alevinval/sse`
 
 Check the [contributing guidelines](CONTRIBUTING.md) when submitting changes.
 
 ## Usage
 
 ```go
-import "github.com/go-rfc/sse/pkg/eventsource"
+import "github.com/alevinval/sse/pkg/eventsource"
 
 es, err := eventsource.New("http://foo.com/stocks/AAPL")
 
@@ -40,7 +40,7 @@ underlying HTTP request.
 The decoder package allows decoding events from any `io.Reader` source
 
 ```go
-import "github.com/go-rfc/sse/pkg/decoder"
+import "github.com/alevinval/sse/pkg/decoder"
 
 resp, _ := http.Get("http://foo.com/stocks/AAPL")
 decoder = decoder.New(resp.Body) // any io.Reader works
@@ -54,7 +54,7 @@ for {
 The encoder package allows encoding a stream of events
 
 ```go
-import "github.com/go-rfc/sse/pkg/encoder"
+import "github.com/alevinval/sse/pkg/encoder"
 
 event := &base.MessageEvent{
     ID:   "some id",

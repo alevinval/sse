@@ -1,4 +1,4 @@
-module github.com/go-rfc/sse
+module github.com/alevinval/sse
 
 go 1.18
 

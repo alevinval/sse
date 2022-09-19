@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/go-rfc/sse/pkg/eventsource"
+	"github.com/alevinval/sse/pkg/eventsource"
 )
 
 var (

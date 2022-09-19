@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/go-rfc/sse/internal/testutils"
-	"github.com/go-rfc/sse/pkg/base"
+	"github.com/alevinval/sse/internal/testutils"
+	"github.com/alevinval/sse/pkg/base"
 	"github.com/stretchr/testify/assert"
 )
 

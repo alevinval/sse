@@ -3,7 +3,7 @@ package testutils
 import (
 	"math/rand"
 
-	"github.com/go-rfc/sse/pkg/base"
+	"github.com/alevinval/sse/pkg/base"
 )
 
 const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"

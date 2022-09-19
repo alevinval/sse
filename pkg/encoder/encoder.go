@@ -5,7 +5,7 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/go-rfc/sse/pkg/base"
+	"github.com/alevinval/sse/pkg/base"
 )
 
 type Encoder struct {

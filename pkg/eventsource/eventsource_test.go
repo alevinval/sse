@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-rfc/sse/internal/testutils/server"
-	"github.com/go-rfc/sse/pkg/base"
+	"github.com/alevinval/sse/internal/testutils/server"
+	"github.com/alevinval/sse/pkg/base"
 	"github.com/stretchr/testify/assert"
 )
 

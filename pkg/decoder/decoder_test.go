@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-rfc/sse/internal/testutils"
-	"github.com/go-rfc/sse/pkg/encoder"
+	"github.com/alevinval/sse/internal/testutils"
+	"github.com/alevinval/sse/pkg/encoder"
 	"github.com/stretchr/testify/assert"
 )
 

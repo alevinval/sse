@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/go-rfc/sse/pkg/base"
-	"github.com/go-rfc/sse/pkg/decoder"
+	"github.com/alevinval/sse/pkg/base"
+	"github.com/alevinval/sse/pkg/decoder"
 )
 
 const (
