@@ -62,7 +62,11 @@ event := &base.MessageEvent{
     Data: "AAPL 30.09",
 }
 
-sut.WriteComment("example event")
-sut.WriteRetry(1000)
-sut.WriteEvent(event)
+out := new(bytes.Buffer)
+encoder := New(out)
+
+encoder.WriteComment("example event")
+encoder.WriteEvent(event)
+
 ```
+
