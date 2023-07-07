@@ -16,8 +16,6 @@ const contentTypeEventStream = "text/event-stream; charset=utf-8"
 // MockHandler used to emulate an http server that follows
 // the SSE spec
 type MockHandler struct {
-	// Server instance of the test HTTP server
-	Server *httptest.Server
 
 	// URL of the HTTP test server
 	URL string
@@ -39,6 +37,7 @@ type MockHandler struct {
 	Connected chan struct{}
 
 	t           *testing.T
+	server      *httptest.Server
 	encoder     *encoder.Encoder
 	flusher     http.Flusher
 	lastEventID string
@@ -54,8 +53,8 @@ func NewMockHandler(t *testing.T) *MockHandler {
 		closer:               make(chan struct{}),
 		Connected:            make(chan struct{}, 1),
 	}
-	handler.Server = httptest.NewServer(handler)
-	handler.URL = handler.Server.URL
+	handler.server = httptest.NewServer(handler)
+	handler.URL = handler.server.URL
 	return handler
 }
 
@@ -134,5 +133,5 @@ func (h *MockHandler) CloseActiveRequest(block bool) {
 // test HTTP server
 func (h *MockHandler) Close() {
 	h.CloseActiveRequest(false)
-	h.Server.Close()
+	h.server.Close()
 }
