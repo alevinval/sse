@@ -6,7 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alevinval/sse/internal/testutils"
 	"github.com/alevinval/sse/pkg/base"
+	"github.com/alevinval/sse/pkg/decoder"
 	"github.com/alevinval/sse/pkg/encoder"
 	"github.com/stretchr/testify/assert"
 )
@@ -102,6 +104,7 @@ func (h *MockHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 }
 
 func (h *MockHandler) WriteEvent(event *base.MessageEvent) {
+	h.t.Logf("writing event %v", event)
 	if event.ID != "" || event.HasID {
 		h.lastEventID = event.ID
 	}
@@ -111,14 +114,21 @@ func (h *MockHandler) WriteEvent(event *base.MessageEvent) {
 	h.flusher.Flush()
 }
 
-func (h *MockHandler) WriteRetry(delayInMillis int) {
+func (h *MockHandler) WriteRetry(delayInMillis int, getDecoder func() *decoder.Decoder) {
+	h.t.Logf("writing retry %d", delayInMillis)
 	h.encoder.WriteRetry(delayInMillis)
 	h.flusher.Flush()
+
+	testutils.ExpectCondition(h.t, func() bool {
+		actual := getDecoder().Retry().Milliseconds()
+		h.t.Logf("expecting retry to be %d (actual=%d)", delayInMillis, actual)
+		return actual == int64(delayInMillis)
+	})
 }
 
 // CloseActiveRequest cancels the current request being served
 func (h *MockHandler) CloseActiveRequest(block bool) {
-	h.t.Logf("[closing active request]")
+	h.t.Logf("[closing active request (block=%v)]", block)
 	if block {
 		h.closer <- struct{}{}
 	} else {
