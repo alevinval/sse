@@ -36,6 +36,7 @@ type EventSource struct {
 	url              string
 	lastEventID      string
 	requestModifiers []RequestModifier
+	decoder          *decoder.Decoder
 
 	safe struct {
 		sync.RWMutex
@@ -172,12 +173,12 @@ func (es *EventSource) consumer(initialConn chan error) {
 	}
 	initialConn <- nil
 
-	d := decoder.New(es.getResp().Body)
+	es.decoder = decoder.New(es.getResp().Body)
 	for {
-		ev, err := d.Decode()
+		ev, err := es.decoder.Decode()
 		if err != nil {
 			for es.mustReconnect(err) {
-				time.Sleep(d.Retry())
+				time.Sleep(es.decoder.Retry())
 				err = es.connect()
 			}
 			if es.isClosed() {
@@ -186,7 +187,7 @@ func (es *EventSource) consumer(initialConn chan error) {
 				es.doClose(err)
 				return
 			}
-			d = decoder.New(es.getResp().Body)
+			es.decoder = decoder.New(es.getResp().Body)
 			continue
 		}
 
@@ -242,4 +243,8 @@ func (es *EventSource) getResp() *http.Response {
 
 func (es *EventSource) isClosed() bool {
 	return atomic.LoadUint32(&es.close.closed) > 0
+}
+
+func (es *EventSource) getDecoder() *decoder.Decoder {
+	return es.decoder
 }
