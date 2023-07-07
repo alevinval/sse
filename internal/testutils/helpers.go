@@ -30,6 +30,7 @@ func ExpectCondition(t *testing.T, condition func() bool) {
 			return
 		}
 		time.Sleep(time.Duration(sleep) * time.Millisecond)
+		sleep *= 2
 	}
 
 	t.Errorf("expected condition never happened after %d polls", n)
