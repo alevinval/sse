@@ -3,7 +3,6 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
 
@@ -17,8 +16,6 @@ const contentTypeEventStream = "text/event-stream; charset=utf-8"
 // MockHandler used to emulate an http server that follows
 // the SSE spec
 type MockHandler struct {
-	sync.Mutex
-
 	// Server instance of the test HTTP server
 	Server *httptest.Server
 
@@ -122,9 +119,6 @@ func (h *MockHandler) WriteRetry(delayInMillis int) {
 }
 
 func (h *MockHandler) Flush() {
-	h.Lock()
-	defer h.Unlock()
-
 	if h.flusher != nil {
 		h.flusher.Flush()
 	}
@@ -151,8 +145,5 @@ func (h *MockHandler) Close() {
 }
 
 func (h *MockHandler) setFlusher(flusher http.Flusher) {
-	h.Lock()
-	defer h.Unlock()
-
 	h.flusher = flusher
 }
