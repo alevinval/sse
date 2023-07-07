@@ -2,6 +2,8 @@ package testutils
 
 import (
 	"math/rand"
+	"testing"
+	"time"
 
 	"github.com/alevinval/sse/pkg/base"
 )
@@ -18,4 +20,17 @@ func randString(n int) string {
 		b[i] = letters[rand.Intn(len(letters))]
 	}
 	return string(b)
+}
+
+func ExpectCondition(t *testing.T, condition func() bool) {
+	n, max, sleep := 0, 10, 25
+	for n < max {
+		n++
+		if condition() {
+			return
+		}
+		time.Sleep(time.Duration(sleep) * time.Millisecond)
+	}
+
+	t.Errorf("expected condition never happened after %d polls", n)
 }
