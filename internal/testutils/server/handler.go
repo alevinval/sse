@@ -61,7 +61,7 @@ func NewMockHandler(t *testing.T) *MockHandler {
 
 func (h *MockHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	h.encoder = encoder.New(rw)
-	h.setFlusher(rw.(http.Flusher))
+	h.flusher = rw.(http.Flusher)
 
 	if len(h.BasicAuth.Username) > 0 {
 		username, password, ok := req.BasicAuth()
@@ -90,7 +90,7 @@ func (h *MockHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	h.MaxRequestsToProcess--
-	h.Flush()
+	h.flusher.Flush()
 	h.Connected <- struct{}{}
 
 	select {
@@ -100,7 +100,6 @@ func (h *MockHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		h.t.Log("auto-closing active request after 1s")
 		h.t.FailNow()
 	}
-	h.setFlusher(nil)
 }
 
 func (h *MockHandler) WriteEvent(event *base.MessageEvent) {
@@ -110,18 +109,12 @@ func (h *MockHandler) WriteEvent(event *base.MessageEvent) {
 
 	h.encoder.WriteComment("sending test event")
 	h.encoder.WriteEvent(event)
-	h.Flush()
+	h.flusher.Flush()
 }
 
 func (h *MockHandler) WriteRetry(delayInMillis int) {
 	h.encoder.WriteRetry(delayInMillis)
-	h.Flush()
-}
-
-func (h *MockHandler) Flush() {
-	if h.flusher != nil {
-		h.flusher.Flush()
-	}
+	h.flusher.Flush()
 }
 
 // CloseActiveRequest cancels the current request being served
@@ -142,8 +135,4 @@ func (h *MockHandler) CloseActiveRequest(block bool) {
 func (h *MockHandler) Close() {
 	h.CloseActiveRequest(false)
 	h.Server.Close()
-}
-
-func (h *MockHandler) setFlusher(flusher http.Flusher) {
-	h.flusher = flusher
 }
