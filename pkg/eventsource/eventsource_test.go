@@ -90,7 +90,7 @@ func TestEventSource_WhenMultipleWrites_ThenKeepsLastEventID(t *testing.T) {
 		defer sut.Close()
 
 		<-handler.Connected
-		handler.WriteRetry(1)
+		handler.WriteRetry(1, sut.getDecoder)
 		handler.WriteEvent(eventWithID)
 		assertReceive(t, sut, eventWithID)
 		assert.Equal(t, "event-id", sut.lastEventID)
@@ -138,11 +138,11 @@ func TestEventSource_WhenReconnecting_RetryIsRespected(t *testing.T) {
 		defer sut.Close()
 
 		<-handler.Connected
-		handler.WriteRetry(int(longDelay.Milliseconds()))
+		handler.WriteRetry(int(longDelay.Milliseconds()), sut.getDecoder)
 		handler.CloseActiveRequest(true)
 		assertConnectionWithinDeadline(t, handler, longDelay, 2*longDelay)
 
-		handler.WriteRetry(int(shortDelay.Milliseconds()))
+		handler.WriteRetry(int(shortDelay.Milliseconds()), sut.getDecoder)
 		handler.CloseActiveRequest(true)
 		assertConnectionWithinDeadline(t, handler, shortDelay, longDelay)
 
@@ -160,7 +160,7 @@ func TestEventSource_WhenConnectionDropped_CannotReconnect(t *testing.T) {
 		defer sut.Close()
 
 		<-handler.Connected
-		handler.WriteRetry(1)
+		handler.WriteRetry(1, sut.getDecoder)
 		handler.CloseActiveRequest(true)
 
 		assertNoReceives(t, sut)
@@ -179,7 +179,7 @@ func TestEventSource_DropConnection_CanReconnect(t *testing.T) {
 		defer sut.Close()
 
 		<-handler.Connected
-		handler.WriteRetry(1)
+		handler.WriteRetry(1, sut.getDecoder)
 		handler.CloseActiveRequest(true)
 		<-handler.Connected
 
