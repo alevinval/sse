@@ -1,8 +1,8 @@
-package decoder
+package internal
 
-// scanLinesCRLF is a variation of bufio.ScanLines that also recognizes
+// ScanLinesCRLF is a variation of bufio.ScanLines that also recognizes
 // just CR as EOL (as specified in the EventSource spec)
-func scanLinesCR(data []byte, atEOF bool) (advance int, token []byte, err error) {
+func ScanLinesCR(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if atEOF && len(data) == 0 {
 		return 0, nil, nil
 	}

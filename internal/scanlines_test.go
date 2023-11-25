@@ -1,4 +1,4 @@
-package decoder
+package internal
 
 import (
 	"testing"
@@ -47,7 +47,7 @@ func TestScanLines(t *testing.T) {
 		{"abc\r", true, 4, "abc", nil},
 	} {
 		t.Logf("in: %#v, atEOF: %v", test.in, test.atEOF)
-		advance, line, err := scanLinesCR([]byte(test.in), test.atEOF)
+		advance, line, err := ScanLinesCR([]byte(test.in), test.atEOF)
 		if test.err != nil {
 			if assert.Error(err) {
 				assert.Equal(0, advance)
