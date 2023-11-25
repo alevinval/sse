@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alevinval/sse/internal"
 	"github.com/alevinval/sse/pkg/base"
 )
 
@@ -34,7 +35,7 @@ func NewSize(in io.Reader, bufferSize int) *Decoder {
 	if bufferSize > 0 {
 		d.scanner.Buffer(make([]byte, bufferSize), bufferSize)
 	}
-	d.scanner.Split(scanLinesCR) // See scanlines.go
+	d.scanner.Split(internal.ScanLinesCR) // See scanlines.go
 	return d
 }
 
