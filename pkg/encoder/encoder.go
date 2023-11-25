@@ -1,10 +1,13 @@
 package encoder
 
 import (
+	"bufio"
 	"bytes"
 	"io"
 	"strconv"
+	"strings"
 
+	"github.com/alevinval/sse/internal"
 	"github.com/alevinval/sse/pkg/base"
 )
 
@@ -41,9 +44,18 @@ func (e *Encoder) WriteEvent(event base.MessageEventGetter) (int, error) {
 	}
 
 	if event.GetData() != "" {
-		e.buf.WriteString("data: ")
-		e.buf.WriteString(event.GetData())
-		e.buf.WriteByte('\n')
+		input := strings.NewReader(event.GetData())
+		scanner := bufio.NewScanner(input)
+		scanner.Split(internal.ScanLinesCR)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if len(line) == 0 {
+				break
+			}
+			e.buf.WriteString("data: ")
+			e.buf.WriteString(line)
+			e.buf.WriteByte('\n')
+		}
 	}
 
 	e.buf.WriteByte('\n')
