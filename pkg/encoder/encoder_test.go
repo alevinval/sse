@@ -54,6 +54,16 @@ func TestEncoder_WriteEvent_EncodesData(t *testing.T) {
 	assert.Equal(t, "data: event-data\n\n", out.String())
 }
 
+func TestEncoder_WriteEvent_EncodesMultiLineInput(t *testing.T) {
+	sut, out := getEncoder()
+	sut.WriteEvent(&base.MessageEvent{
+		ID:   "abc",
+		Name: "test",
+		Data: "line1\nline2",
+	})
+	assert.Equal(t, "id: abc\nevent: test\ndata: line1\ndata: line2\n\n", out.String())
+}
+
 func TestEncoder_WriteEvent_EncodesFullEvent(t *testing.T) {
 	event := &base.MessageEvent{ID: "event-id", Name: "event-name", Data: "event-data"}
 	sut, out := getEncoder()
